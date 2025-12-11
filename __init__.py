@@ -3,8 +3,7 @@
 
 # 导入插件的主要模块
 from .main import MemosIntegratorPlugin
-from .memos_client import MemOS_Client
-from .memory_manager import MemoryManager
+from .memory_manager import MemOS_Client, MemoryManager
 from .memory_templates import MemoryTemplates
 
 __all__ = ["MemosIntegratorPlugin", "MemOS_Client", "MemoryManager", "MemoryTemplates"]

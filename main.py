@@ -7,8 +7,7 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
-from .memos_client import MemOS_Client
-from .memory_manager import MemoryManager
+from .memory_manager import MemOS_Client, MemoryManager
 
 # 主插件类
 @register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.0.0")
