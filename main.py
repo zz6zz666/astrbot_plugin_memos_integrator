@@ -7,7 +7,7 @@ from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
-from .memos_client import MemOSClient
+from .memos_client import MemOS_Client
 from .memory_manager import MemoryManager
 
 # 主插件类
@@ -37,7 +37,7 @@ class MemosIntegratorPlugin(Star):
                 return False
                 
             # 初始化客户端和管理器
-            self.client = MemOSClient(
+            self.client = MemOS_Client(
                 api_key=self.config.get("api_key", "")
             )
             

@@ -6,9 +6,9 @@ MemOS客户端
 from typing import Dict, List, Any
 
 from astrbot.api import logger
-from memos.api.client import MemOSClient as OfficialMemOSClient
+from memos.api.client import MemOSClient
 
-class MemOSClient:
+class MemOS_Client:
     """MemOS云服务API客户端"""
     
     def __init__(self, api_key: str):
@@ -17,7 +17,7 @@ class MemOSClient:
         Args:
             api_key: API密钥
         """
-        self.client = OfficialMemOSClient(api_key=api_key)
+        self.client = MemOSClient(api_key=api_key)
         logger.info("MemOS客户端初始化完成")
     
     async def add_message(self, messages: List[Dict[str, str]], user_id: str, conversation_id: str) -> Dict[str, Any]:
@@ -31,9 +31,14 @@ class MemOSClient:
         Returns:
             操作结果字典，包含success状态和相关信息
         """
+        import asyncio
         try:
-            # 使用官方客户端API
-            result = self.client.add_message(messages=messages, user_id=user_id, conversation_id=conversation_id)
+            # 使用官方客户端API（同步方法转换为异步执行）
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                None, 
+                lambda: self.client.add_message(messages=messages, user_id=user_id, conversation_id=conversation_id)
+            )
             logger.info(f"成功添加对话消息，用户ID: {user_id}, 对话ID: {conversation_id}")
             return {"success": True, "data": result}
         except Exception as e:
