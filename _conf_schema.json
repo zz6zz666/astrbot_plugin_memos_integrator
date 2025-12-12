@@ -22,12 +22,26 @@
     "type": "string",
     "options": ["auto", "zh", "en"],
     "hint": "auto: 自动检测; zh: 中文; en: English",
-    "default": "auto"
+    "default": "zh"
   },
   "upload_interval": {
     "type": "int",
     "description": "记忆上传频率 (轮数)",
     "hint": "每积累多少轮对话后上传一次。默认为1 (实时上传)。设置为3表示每3个问答对上传一次。",
     "default": 1
+  },
+  "group_injection_type": {
+    "type": "string",
+    "description": "群聊记忆注入类型",
+    "options": ["user", "system"],
+    "hint": "user: 将记忆临时注入到用户prompt中; system: 将记忆作为system消息添加到上下文中",
+    "default": "system"
+  },
+  "private_injection_type": {
+    "type": "string",
+    "description": "私聊记忆注入类型",
+    "options": ["user", "system"],
+    "hint": "user: 将记忆临时注入到用户prompt中; system: 将记忆作为system消息添加到上下文中",
+    "default": "user"
   }
 }

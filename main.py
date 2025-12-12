@@ -6,13 +6,14 @@ MemOS记忆集成插件
 import asyncio
 from typing import Dict, List
 from astrbot.api.event import filter, AstrMessageEvent
+from astrbot.api.platform import MessageType
 from astrbot.api.star import Context, Star, register
 from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
 from .memory_manager import MemoryManager
 
 # 主插件类
-@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.2.0")
+@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.3.0")
 class MemosIntegratorPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -41,6 +42,10 @@ class MemosIntegratorPlugin(Star):
             self.memory_limit = self.config.get("memory_limit", 5)
             self.prompt_language = self.config.get("prompt_language", "auto")
             self.upload_interval = self.config.get("upload_interval", 1) # 获取上传频率配置
+            
+            # 新增配置：控制群聊和私聊场景下的注入类型
+            self.group_injection_type = self.config.get("group_injection_type", "user")  # 群聊注入类型: "user" 或 "system"
+            self.private_injection_type = self.config.get("private_injection_type", "user")  # 私聊注入类型: "user" 或 "system"
 
             # 初始化记忆管理器
             self.memory_manager = MemoryManager(
@@ -50,6 +55,7 @@ class MemosIntegratorPlugin(Star):
 
             logger.info("MemOS记忆集成插件已加载")
             logger.info(f"插件配置: API地址={base_url}, 记忆注入限制={self.memory_limit}, 批量上传频率={self.upload_interval}轮")
+            logger.info(f"注入类型配置: 群聊={self.group_injection_type}, 私聊={self.private_injection_type}")
         except Exception as e:
             logger.error(f"初始化MemOS记忆管理器失败: {e}")
             self.memory_manager = None
@@ -73,7 +79,7 @@ class MemosIntegratorPlugin(Star):
 
         return conversation_id
         
-    @filter.on_llm_request(priority=-10000)
+    @filter.on_llm_request(priority=-1000)
     async def inject_memories(self, event: AstrMessageEvent, req: ProviderRequest):
         """在LLM请求前获取记忆并注入"""
         if self.memory_manager is None:
@@ -82,7 +88,6 @@ class MemosIntegratorPlugin(Star):
         session_id = self._get_session_id(event)
         conversation_id = await self._get_conversation_id(event)
         user_message = req.prompt
-        self.original_prompts[session_id] = user_message
 
         memories = await self.memory_manager.retrieve_relevant_memories(
             user_message, session_id, conversation_id, limit=self.memory_limit
@@ -97,17 +102,32 @@ class MemosIntegratorPlugin(Star):
             else:
                 language = self.prompt_language
 
-            model_type = "default"
-            if hasattr(req, "model") and req.model:
-                if "qwen" in req.model.lower():
-                    model_type = "qwen"
-                elif "gemini" in req.model.lower():
-                    model_type = "gemini"
-
-            req.prompt = await self.memory_manager.inject_memory_to_prompt(
-                user_message, memories, language, model_type
+            # 判断消息类型（群聊或私聊）
+            is_group_message = event.get_message_type() == MessageType.GROUP_MESSAGE
+            
+            # 根据配置选择注入类型
+            injection_type = self.group_injection_type if is_group_message else self.private_injection_type
+            
+            # 构建记忆提示词
+            memory_prompt = await self.memory_manager.inject_memory_to_prompt(
+                user_message, memories, language, injection_type
             )
-            logger.info(f"已为会话 {session_id} 注入 {len(memories)} 条记忆")
+            
+            if injection_type == "system":
+                # 使用system注入：将记忆内容作为system消息添加到contexts中
+                # 由于模板已经根据injection_type生成了正确的内容，直接使用memory_prompt
+                req.contexts.append({
+                    "role": "system",
+                    "content": memory_prompt
+                })
+                
+                # 保持prompt为原始用户消息
+                logger.info(f"已为会话 {session_id} 以system类型注入 {len(memories)} 条记忆")
+            else:
+                # 使用user注入：保存原始prompt以便恢复
+                self.original_prompts[session_id] = user_message
+                req.prompt = memory_prompt
+                logger.info(f"已为会话 {session_id} 以user类型注入 {len(memories)} 条记忆")
             
     @filter.on_llm_response()
     async def save_memories(self, event: AstrMessageEvent, resp: LLMResponse):
@@ -120,15 +140,32 @@ class MemosIntegratorPlugin(Star):
             session_id = self._get_session_id(event)
             conversation_id = await self._get_conversation_id(event)
 
-            # 恢复原始prompt
+            # 处理不同注入类型的后续操作
             user_message = None
-            if session_id in self.original_prompts:
+            req = event.get_extra("provider_request")
+            
+            # 判断当前消息类型（群聊或私聊）
+            is_group_message = event.get_message_type() == MessageType.GROUP_MESSAGE
+            
+            # 根据配置获取当前场景的注入类型
+            injection_type = self.group_injection_type if is_group_message else self.private_injection_type
+            
+            if session_id in self.original_prompts and injection_type == "user":
+                # 使用user注入：恢复原始prompt
                 original_prompt = self.original_prompts[session_id]
                 user_message = original_prompt
-                req = event.get_extra("provider_request")
                 if req is not None:
                     req.prompt = original_prompt
                 del self.original_prompts[session_id]
+            elif injection_type == "system":
+                # 使用system注入：清除上下文中最后一个system提示词
+                if req is not None and req.contexts:
+                    # 从后往前查找最后一个system消息并删除
+                    for i in range(len(req.contexts) - 1, -1, -1):
+                        if req.contexts[i].get("role") == "system":
+                            del req.contexts[i]
+                            logger.debug(f"已清除会话 {session_id} 上下文中的system提示词")
+                            break
 
             if not user_message:
                 user_message = event.message_str

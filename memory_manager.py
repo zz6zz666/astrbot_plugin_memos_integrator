@@ -284,7 +284,7 @@ class MemoryManager:
             logger.error(f"更新记忆时出错: {e}")
             return False
 
-    async def inject_memory_to_prompt(self, original_prompt: str, memories: List[Dict], language: str = "zh", model_type: str = "default") -> str:
+    async def inject_memory_to_prompt(self, original_prompt: str, memories: List[Dict], language: str = "zh", injection_type: str = "user") -> str:
         """将记忆注入到用户提示中
 
         Args:
@@ -292,6 +292,7 @@ class MemoryManager:
             memories: 记忆列表
             language: 语言,"zh"为中文,"en"为英文
             model_type: 模型类型,"default"为默认模型,"qwen"为通义千问模型
+            injection_type: 注入类型,"user"为用户注入,"system"为系统注入
 
         Returns:
             注入记忆后的提示
@@ -309,8 +310,8 @@ class MemoryManager:
             current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
 
             # 获取记忆注入模板
-            template = MemoryTemplates.get_injection_template(language, model_type)
-            logger.debug(f"使用的记忆注入模板类型: {language}-{model_type}")
+            template = MemoryTemplates.get_injection_template(language, injection_type)
+            logger.debug(f"使用的记忆注入模板类型: {language}-{injection_type}")
 
             # 填充模板
             injected_prompt = template.format(

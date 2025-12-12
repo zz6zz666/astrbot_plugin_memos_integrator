@@ -119,12 +119,12 @@ class MemoryTemplates:
     3. **Output**: Answer the question directly, **strictly prohibit** mentioning system internal terms like "memory library", "retrieval" or "AI viewpoints"."""
     
     @classmethod
-    def get_injection_template(cls, language: str = "zh", model_type: str = "default") -> str:
+    def get_injection_template(cls, language: str = "zh", injection_type: str = "user") -> str:
         """获取记忆注入模板
         
         Args:
             language: 语言，"zh"为中文，"en"为英文
-            model_type: 模型类型，"default"为默认模型，"qwen"为通义千问模型
+            injection_type: 注入类型，"user"为用户注入，"system"为系统注入
             
         Returns:
             记忆注入模板字符串
@@ -148,8 +148,15 @@ class MemoryTemplates:
             account_protocol = cls.MEM_TOOL_ACCOUNT_PROTOCOL + "\n"
             query_instructions = cls.MEM_TOOL_QUERY_INSTRUCTIONS + "\n"
         
-        # 统一模板：所有模型都采用 Query 在后的方式
-        template = f"""{mem_text}{system_context}{system_extra_info}
+        if injection_type == "system":
+            # System注入模板：不包含Original Query部分
+            template = f"""{mem_text}{system_context}{system_extra_info}
+{{memory_content}}
+
+{account_protocol}{query_instructions}"""
+        else:
+            # User注入模板：包含Original Query部分
+            template = f"""{mem_text}{system_context}{system_extra_info}
 {{memory_content}}
 
 {account_protocol}{query_instructions}
