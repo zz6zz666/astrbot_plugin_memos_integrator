@@ -59,7 +59,8 @@ MemOS 是一个先进的记忆操作系统，为 AI 提供强大的记忆能力�
   "base_url": "https://memos.memtensor.cn/api/openmem/v1",
   "max_memory_length": 1000,
   "memory_limit": 5,
-  "prompt_language": "auto"
+  "prompt_language": "auto",
+  "upload_interval": 1
 }
 ```
 
