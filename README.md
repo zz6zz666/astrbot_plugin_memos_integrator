@@ -161,4 +161,4 @@ zz6zz666
 
 ## 许可证
 
-MIT License
+本插件基于 GPLv3 许可证发布。
