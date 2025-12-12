@@ -1,18 +1,36 @@
-# AstrBot MemOS 集成插件 v2.0
+# AstrBot 的 MemOS 集成插件
 
 这是一个为AstrBot开发的MemOS集成插件,允许Bot记忆用户对话内容,并在后续对话中提供个性化响应。
 
-## ✨ v2.0 重大更新
+## 🔍 核心特性说明
 
-### 架构优化
-- **移除 SDK 依赖**: 不再依赖 `MemoryOS` SDK,改用 HTTP API 直接访问
-- **简化类结构**: 合并 `MemOS_Client` 和 `MemoryManager`,消除循环依赖
-- **优化初始化**: 解决了 v1.0 中 "memory_manager 未初始化" 的问题
-- **减少依赖**: 仅需 `aiohttp`,安装更简单
+**重要强调**：本插件的**记忆注入模板**与**记忆安全协议**等核心逻辑，完全复用了 MemOS 官方浏览器扩展 [**MemOS-MindDock 个人记忆助手**](https://alidocs.dingtalk.com/i/p/e3ZxX84Z5KM6X7dRZxX8v66wA7xaBG7d?dontjump=true) 的源码逻辑。这样确保了记忆注入能够达到与官方工具完全一致的最佳效果，提供最可靠的用户体验。
 
-### 配置增强
-- **新增 base_url 配置**: 支持自定义 MemOS API 地址
-- **从配置文件读取**: 不依赖环境变量
+## 📖 MemOS 介绍
+
+MemOS 是一个先进的记忆操作系统，为 AI 提供强大的记忆能力。通过 MemOS，AI 可以：
+- **长期记忆**：持久化存储用户对话和交互历史
+- **智能检索**：根据用户当前查询快速找到相关记忆
+- **上下文理解**：理解记忆之间的关联和上下文关系
+- **个性化响应**：基于用户历史行为提供个性化服务
+
+更多关于 MemOS 的信息，请访问 [MemOS 官方介绍](https://memos-docs.openmem.net/cn/overview/introduction/)
+
+## 🎯 插件作用与原理
+
+本插件将 AstrBot 与 MemOS 深度集成，实现以下核心功能：
+
+### 自动记忆管理
+- **对话保存**：自动将用户与Bot的对话内容保存到MemOS
+- **智能检索**：根据当前对话上下文检索最相关的历史记忆
+- **上下文注入**：将相关记忆无缝注入到LLM提示词中，提供完整上下文
+
+### 工作原理
+1. **对话捕获**：监听用户与Bot的所有对话
+2. **记忆存储**：将对话内容发送到MemOS进行持久化存储
+3. **智能检索**：当用户发起新查询时，基于语义相似度检索相关记忆
+4. **上下文增强**：将检索到的记忆格式化为提示词，增强LLM的理解和响应能力
+5. **持续学习**：随着对话的进行，不断更新和完善用户的记忆库
 
 ## 功能特点
 
@@ -48,7 +66,7 @@
 
 ### 配置项说明
 
-- `api_key` (必填): MemOS API密钥
+- `api_key` (必填): MemOS API密钥,请前往 [MemOS API密钥页面](https://memos-dashboard.openmem.net/cn/apikeys/) 获取
 - `base_url` (可选): MemOS API基础URL,默认为官方地址
 
 ## 使用方法
@@ -97,20 +115,14 @@ astrbot_plugin_memos_integrator/
 
 ## 技术细节
 
-### 类关系对比
+### 类结构
 
-**v1.0 (旧版 - 有循环依赖):**
-```
-main.py → MemOS_Client (SDK封装)
-       → MemoryManager (依赖 MemOS_Client)
-       → MemoryTemplates
-```
-
-**v2.0 (新版 - 简化结构):**
 ```
 main.py → MemoryManager (直接HTTP API)
        → MemoryTemplates (纯工具类,无依赖)
 ```
+
+MemoryManager 直接使用 HTTP API 与 MemOS 交互，无需额外的 SDK 依赖，结构简洁高效。
 
 ### 初始化流程
 
@@ -142,47 +154,6 @@ main.py → MemoryManager (直接HTTP API)
 
 - `get_injection_template()`: 获取注入模板
 - `format_memory_content()`: 格式化记忆内容
-
-## 故障排查
-
-### 问题 1: memory_manager 未初始化
-
-**原因**: API 密钥未配置或配置错误
-
-**解决方法**:
-1. 检查插件配置中是否填写了 `api_key`
-2. 查看 AstrBot 日志中的错误信息
-3. 确认 API 密钥有效且未过期
-
-### 问题 2: HTTP 请求超时
-
-**原因**: 网络问题或 MemOS API 服务不可用
-
-**解决方法**:
-1. 检查网络连接是否正常
-2. 尝试自定义 `base_url` 配置项
-3. 检查 MemOS API 服务状态
-4. 查看日志中的详细错误信息
-
-### 问题 3: 记忆未保存
-
-**原因**: API 请求失败或配置错误
-
-**解决方法**:
-1. 检查日志中是否有 "保存对话失败" 的错误
-2. 确认 `api_key` 和 `base_url` 配置正确
-3. 尝试手动访问 API 地址测试连接
-
-## 从 v1.0 迁移
-
-如果你正在使用 v1.0 版本,升级到 v2.0 非常简单:
-
-1. **更新代码**: 替换所有插件文件
-2. **更新配置**: 在配置中添加 `base_url` 项(可选)
-3. **更新依赖**: 运行 `pip install -r requirements.txt` (会自动卸载 MemoryOS SDK)
-4. **重启 AstrBot**: 重启后即可使用新版本
-
-配置文件无需改动(除非你想自定义 `base_url`)。
 
 ## 作者
 

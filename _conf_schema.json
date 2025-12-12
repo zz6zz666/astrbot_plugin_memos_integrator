@@ -14,7 +14,7 @@
   "memory_limit": {
     "type": "int",
     "description": "记忆注入数量限制",
-    "hint": "每次最多注入多少条记忆到提示词中（默认5条）",
+    "hint": "每次最多注入多少条事实记忆到提示词中（偏好记忆一定注入）",
     "default": 5
   },
   "prompt_language": {

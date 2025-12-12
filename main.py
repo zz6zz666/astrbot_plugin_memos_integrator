@@ -10,7 +10,7 @@ from astrbot.api import AstrBotConfig, logger
 from .memory_manager import MemoryManager
 
 # 主插件类
-@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "2.0.0")
+@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.0.0")
 class MemosIntegratorPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
