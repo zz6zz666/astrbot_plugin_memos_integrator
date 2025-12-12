@@ -16,42 +16,31 @@ class MemosIntegratorPlugin(Star):
         super().__init__(context)
         self.config = config
         self.memory_manager = None
-        
-    async def info(self) -> dict:
-        return {
-            "name": "MemOS记忆集成插件",
-            "description": "使用MemOS Python SDK实现记忆获取、注入和更新功能",
-            "author": "Your Name",
-            "version": "2.0.0"
-        }
-        
-    async def on_load(self) -> bool:
-        """插件加载时执行"""
+        self.max_memory_length = 1000
+
+        # 在 __init__ 中初始化记忆管理器
         try:
             # 验证配置
             api_key = self.config.get("api_key", "")
             if not api_key:
-                logger.error("MemOS配置无效,请检查API密钥")
-                self.memory_manager = None
-                return False
+                logger.warning("MemOS API密钥未配置,插件功能将不可用")
+                return
 
             # 获取配置
             base_url = self.config.get("base_url", "https://memos.memtensor.cn/api/openmem/v1")
             self.max_memory_length = self.config.get("max_memory_length", 1000)
 
-            # 初始化记忆管理器(合并了客户端功能)
+            # 初始化记忆管理器
             self.memory_manager = MemoryManager(
                 api_key=api_key,
                 base_url=base_url
             )
 
             logger.info("MemOS记忆集成插件已加载")
-            logger.debug(f"插件配置: API地址={base_url}, 最大记忆长度={self.max_memory_length}")
-            return True
+            logger.info(f"插件配置: API地址={base_url}, 最大记忆长度={self.max_memory_length}")
         except Exception as e:
             logger.error(f"初始化MemOS记忆管理器失败: {e}")
             self.memory_manager = None
-            return False
             
     def _get_session_id(self, event: AstrMessageEvent) -> str:
         """获取会话ID（统一消息来源）"""
