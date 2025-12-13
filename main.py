@@ -4,6 +4,8 @@ MemOS记忆集成插件
 """
 
 import asyncio
+import requests
+import json
 from typing import Dict, List
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.platform import MessageType
@@ -11,9 +13,10 @@ from astrbot.api.star import Context, Star, register
 from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
 from .memory_manager import MemoryManager
+from .commands_handler import CommandsHandler
 
 # 主插件类
-@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.3.0")
+@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.4.0")
 class MemosIntegratorPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -230,3 +233,67 @@ class MemosIntegratorPlugin(Star):
             
         except Exception as e:
             logger.error(f"处理记忆保存流程失败: {e}")
+
+    @filter.command("用户画像")
+    async def user_profile(self, event: AstrMessageEvent):
+        '''这是一个用户画像指令''' # 这是 handler 的描述，将会被解析方便用户了解插件内容。非常建议填写。
+        logger.info(f"触发用户画像指令")
+        
+        query_text = "我的人物关键词是什么？"
+        async for result in self.search_memory(event, query_text, user_profile=True):
+            yield result
+
+    @filter.command("查记忆")
+    async def search_memory_command(self, event: AstrMessageEvent):
+        '''这是一个查询记忆的指令''' # 这是 handler 的描述，将会被解析方便用户了解插件内容。非常建议填写。
+        message_str = event.message_str # 获取消息的纯文本内容
+        if message_str.strip() == "查记忆":
+            yield event.plain_result("请输入要查询的记忆内容，例如：/查记忆 我的兴趣爱好")
+            return
+        
+        # 提取查询文本（去掉命令前缀）
+        query_text = message_str.replace("查记忆", "", 1).strip()
+
+        logger.info(f"触发查询记忆指令，查询内容: {query_text}")
+        
+        async for result in self.search_memory(event, query_text, user_profile=False):
+            yield result
+
+    async def search_memory(self, event: AstrMessageEvent, query_text: str, user_profile: bool = False):
+        '''通用的记忆查询方法''' 
+        if self.memory_manager is None:
+            yield event.plain_result("MemOS记忆管理器未初始化，请检查配置")
+            return
+
+        session_id = self._get_session_id(event)
+        conversation_id = await self._get_conversation_id(event) if not user_profile else None
+        
+        try:
+            # 准备请求数据
+            request_data = {
+                "query": query_text,
+                "user_id": session_id
+            }
+            
+            # 只有在需要时才添加conversation_id
+            if not user_profile and conversation_id:
+                request_data["conversation_id"] = conversation_id
+            
+            # 使用memory_manager的方法查询记忆
+            result = await self.memory_manager.search_memory(**request_data)
+
+            if not result.get("success"):
+                logger.error(f"查询用户记忆失败: {result.get('error')}")
+                yield event.plain_result(f"查询用户记忆失败: {result.get('error')}")
+                return
+
+            res_data = result.get("data", {})
+
+            # 生成用户画像报告
+            report = CommandsHandler.generate_md_report(res_data, user_profile=user_profile)
+
+            yield event.plain_result(f"{report}") # 发送一条纯文本消息
+        except Exception as e:
+            logger.error(f"查询用户记忆失败: {e}")
+            yield event.plain_result(f"查询用户记忆失败: {str(e)}")
+            return

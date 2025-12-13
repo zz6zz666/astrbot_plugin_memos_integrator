@@ -100,22 +100,23 @@ class MemoryManager:
             logger.info(f"成功添加对话消息,用户ID: {user_id}, 对话ID: {conversation_id}")
         return result
 
-    async def search_memory(self, query: str, user_id: str, conversation_id: str) -> Dict[str, Any]:
+    async def search_memory(self, query: str, user_id: str, conversation_id: str = None) -> Dict[str, Any]:
         """搜索相关记忆
 
         Args:
             query: 查询内容
             user_id: 用户ID
-            conversation_id: 对话ID
+            conversation_id: 对话ID（可选）
 
         Returns:
             操作结果字典
         """
         data = {
             "query": query,
-            "user_id": user_id,
-            "conversation_id": conversation_id
+            "user_id": user_id
         }
+        if conversation_id:
+            data["conversation_id"] = conversation_id
 
         result = await self._make_request("/search/memory", data)
         if result.get("success"):
@@ -200,7 +201,7 @@ class MemoryManager:
 
                             # 转换为可读日期格式
                             if isinstance(update_time, (int, float)) and update_time > 0:
-                                timestamp = time.strftime("%Y-%m-%d", time.localtime(update_time))
+                                timestamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(update_time))
                             else:
                                 timestamp = str(update_time) if update_time else ""
 
@@ -227,7 +228,7 @@ class MemoryManager:
                                 update_time = update_time / 1000
 
                             if isinstance(update_time, (int, float)) and update_time > 0:
-                                timestamp = time.strftime("%Y-%m-%d", time.localtime(update_time))
+                                timestamp = time.strftime("%Y-%m-%d %H:%M", time.localtime(update_time))
                             else:
                                 timestamp = str(update_time) if update_time else ""
 
@@ -307,7 +308,7 @@ class MemoryManager:
             logger.debug(f"格式化后的记忆内容:\n{memory_content}")
 
             # 获取当前时间
-            current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            current_time = time.strftime("%Y-%m-%d %H:%M", time.localtime())
 
             # 获取记忆注入模板
             template = MemoryTemplates.get_injection_template(language, injection_type)
