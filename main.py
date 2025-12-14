@@ -7,9 +7,10 @@ import asyncio
 import requests
 import json
 from typing import Dict, List
+from pathlib import Path
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.platform import MessageType
-from astrbot.api.star import Context, Star, register
+from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
 from .memory_manager import MemoryManager
@@ -18,6 +19,8 @@ from .commands_handler import CommandsHandler
 # 主插件类
 @register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.4.0")
 class MemosIntegratorPlugin(Star):
+    PLUGIN_ID = "astrbot_plugin_memos_integrator"
+    
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
@@ -26,8 +29,15 @@ class MemosIntegratorPlugin(Star):
         self.prompt_language = "auto"
         # 缓存配置
         self.upload_interval = 1 
-        # 消息缓存: key为conversation_id, value为消息列表 [{"role": "user", ...}, ...]
-        self.message_buffer: Dict[str, List[Dict[str, str]]] = {} 
+        # 初始化基础目录和数据目录
+        self._base_dir = Path(__file__).resolve().parent
+        self._data_dir = self._resolve_data_dir()
+        # 消息缓存文件路径
+        self._cache_file = self._data_dir / "message_cache.json"
+        # 确保数据目录存在
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        # 从文件加载缓存数据
+        self.message_buffer: Dict[str, List[Dict[str, str]]] = self._load_cache() 
 
         # 用于保存原始prompt的字典，key为session_id
         self.original_prompts = {}
@@ -63,6 +73,41 @@ class MemosIntegratorPlugin(Star):
             logger.error(f"初始化MemOS记忆管理器失败: {e}")
             self.memory_manager = None
             
+    def _resolve_data_dir(self) -> Path:
+        """优先使用 StarTools 数据目录，失败时退回到 AstrBot/data/plugin_data 下。"""
+        fallback_dir = self._base_dir.parent.parent / "plugin_data" / self.PLUGIN_ID
+        try:
+            preferred_raw = StarTools.get_data_dir(self.PLUGIN_ID)
+        except Exception:
+            preferred_raw = None
+        if preferred_raw:
+            preferred_path = Path(preferred_raw)
+            try:
+                preferred_path.mkdir(parents=True, exist_ok=True)
+                return preferred_path
+            except Exception as exc:
+                logger.warning(f"[MemOS记忆集成插件] 创建数据目录失败({exc})，退回 fallback：{fallback_dir}")
+        fallback_dir.mkdir(parents=True, exist_ok=True)
+        return fallback_dir
+
+    def _load_cache(self) -> Dict[str, List[Dict[str, str]]]:
+        """从文件加载缓存数据"""
+        try:
+            if self._cache_file.exists():
+                with open(self._cache_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"加载缓存数据失败: {e}")
+        return {}
+
+    def _save_cache(self):
+        """将缓存数据保存到文件"""
+        try:
+            with open(self._cache_file, 'w', encoding='utf-8') as f:
+                json.dump(self.message_buffer, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存缓存数据失败: {e}")
+
     def _get_session_id(self, event: AstrMessageEvent) -> str:
         """获取会话ID（统一消息来源）"""
         session_id = event.unified_msg_origin
@@ -182,27 +227,42 @@ class MemosIntegratorPlugin(Star):
 
             # --- 核心修改：缓存逻辑 ---
             
-            # 初始化该会话的缓存
-            if conversation_id not in self.message_buffer:
-                self.message_buffer[conversation_id] = []
-
-            # 将当前轮次的对话加入缓存
-            self.message_buffer[conversation_id].append({"role": "user", "content": user_message})
-            self.message_buffer[conversation_id].append({"role": "assistant", "content": ai_response})
-            
-            # 计算当前缓存的对话轮数 (消息数 / 2)
-            current_rounds = len(self.message_buffer[conversation_id]) // 2
-            
-            logger.debug(f"会话 {conversation_id} 当前缓存: {current_rounds}/{self.upload_interval} 轮")
-
-            # 检查是否达到上传阈值
-            if current_rounds >= self.upload_interval:
-                # 准备上传的消息列表（复制一份）
-                messages_to_upload = list(self.message_buffer[conversation_id])
-                # 清空缓存
-                self.message_buffer[conversation_id] = []
+            # 如果upload_interval为1，直接上传，不使用缓存
+            if self.upload_interval == 1:
+                logger.debug(f"会话 {conversation_id} upload_interval为1，直接上传")
+                messages_to_upload = [{"role": "user", "content": user_message}, {"role": "assistant", "content": ai_response}]
                 
-                logger.info(f"会话 {conversation_id} 达到上传阈值 ({current_rounds}轮)，准备批量上传...")
+                logger.info(f"会话 {conversation_id} 直接上传1轮对话...")
+            else:
+                # 初始化该会话的缓存
+                if conversation_id not in self.message_buffer:
+                    self.message_buffer[conversation_id] = []
+
+                # 将当前轮次的对话加入缓存
+                self.message_buffer[conversation_id].append({"role": "user", "content": user_message})
+                self.message_buffer[conversation_id].append({"role": "assistant", "content": ai_response})
+                
+                # 保存缓存到文件
+                self._save_cache()
+                
+                # 计算当前缓存的对话轮数 (消息数 / 2)
+                current_rounds = len(self.message_buffer[conversation_id]) // 2
+                
+                logger.debug(f"会话 {conversation_id} 当前缓存: {current_rounds}/{self.upload_interval} 轮")
+
+                # 检查是否达到上传阈值
+                if current_rounds >= self.upload_interval:
+                    # 准备上传的消息列表（复制一份）
+                    messages_to_upload = list(self.message_buffer[conversation_id])
+                    # 清空缓存
+                    self.message_buffer[conversation_id] = []
+                    # 保存清空后的缓存到文件
+                    self._save_cache()
+                    
+                    logger.info(f"会话 {conversation_id} 达到上传阈值 ({current_rounds}轮)，准备批量上传...")
+                else:
+                    # 未达到上传阈值，不执行上传
+                    return
 
                 async def _save_memory_task(msgs, sess_id, conv_id):
                     """后台批量保存任务"""
