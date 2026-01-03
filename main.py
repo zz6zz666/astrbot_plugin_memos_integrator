@@ -61,6 +61,9 @@ class MemosIntegratorPlugin(Star):
             # 新增配置：控制群聊和私聊场景下的注入类型
             self.group_injection_type = self.config.get("group_injection_type", "user")  # 群聊注入类型: "user" 或 "system"
             self.private_injection_type = self.config.get("private_injection_type", "user")  # 私聊注入类型: "user" 或 "system"
+            
+            # 记忆作用域配置
+            self.memory_scope = self.config.get("memory_scope", "isolated") # isolated: 隔离模式, global: 全局模式
 
             # 初始化记忆管理器
             self.memory_manager = MemoryManager(
@@ -70,7 +73,7 @@ class MemosIntegratorPlugin(Star):
 
             logger.info("MemOS记忆集成插件已加载")
             logger.info(f"插件配置: API地址={base_url}, 记忆注入限制={self.memory_limit}, 批量上传频率={self.upload_interval}轮")
-            logger.info(f"注入类型配置: 群聊={self.group_injection_type}, 私聊={self.private_injection_type}")
+            logger.info(f"注入类型配置: 群聊={self.group_injection_type}, 私聊={self.private_injection_type}, 记忆作用域={self.memory_scope}")
         except Exception as e:
             logger.error(f"初始化MemOS记忆管理器失败: {e}")
             self.memory_manager = None
@@ -157,9 +160,24 @@ class MemosIntegratorPlugin(Star):
             return 0
 
     def _get_session_id(self, event: AstrMessageEvent) -> str:
-        """获取会话ID（统一消息来源）"""
-        session_id = event.unified_msg_origin
-        logger.debug(f"会话ID: {session_id}")
+        """
+        获取会话ID（统一消息来源）
+        根据 memory_scope 配置决定使用 unified_msg_origin (隔离) 还是 sender_id (全局)
+        """
+        if self.memory_scope == "global":
+            # 全局模式：优先使用发送者ID，实现跨场景记忆互通
+            session_id = event.get_sender_id()
+            if not session_id:
+                # 降级：如果获取不到sender_id，回退到unified_msg_origin
+                session_id = event.unified_msg_origin
+                logger.debug(f"全局模式无法获取sender_id，降级使用: {session_id}")
+            else:
+                logger.debug(f"会话ID (Global/Sender): {session_id}")
+        else:
+            # 隔离模式：使用 unified_msg_origin (默认行为)
+            session_id = event.unified_msg_origin
+            logger.debug(f"会话ID (Isolated): {session_id}")
+            
         return session_id
 
     async def _get_conversation_id(self, event: AstrMessageEvent) -> str:
@@ -186,7 +204,7 @@ class MemosIntegratorPlugin(Star):
         user_message = req.prompt
         
         # 无论哪种注入方式，都保存原始prompt以便后续记忆保存
-        self.original_prompts[session_id] = user_message
+        # self.original_prompts[session_id] = user_message  <-- 移除：不再保存 req.prompt，因为它可能包含大量上下文
 
         memories = await self.memory_manager.retrieve_relevant_memories(
             user_message, session_id, conversation_id, limit=self.memory_limit
@@ -254,18 +272,22 @@ class MemosIntegratorPlugin(Star):
             # 根据配置获取当前场景的注入类型
             injection_type = self.group_injection_type if is_group_message else self.private_injection_type
             
-            if session_id in self.original_prompts:
-                # 使用user注入：恢复原始prompt
-                user_message = self.original_prompts[session_id]
+            # if session_id in self.original_prompts:
+            #     # 使用user注入：恢复原始prompt
+            #     user_message = self.original_prompts[session_id]
 
-                del self.original_prompts[session_id]
+            #     del self.original_prompts[session_id]
 
-                if injection_type == "user" and req is not None:
-                    req.prompt = user_message
+            #     if injection_type == "user" and req is not None:
+            #         req.prompt = user_message
+            
+            # --- 修复：始终使用 event.message_str 作为用户消息 ---
+            # 避免使用 req.prompt，因为它可能包含了 AstrBot 注入的群聊历史上下文，导致 Token 爆炸
+            user_message = event.message_str
 
-            if not user_message:
-                user_message = event.message_str
-
+            # 恢复 prompt: 如果使用了 user 注入类型，我们需要在保存后清理 prompt 中的记忆注入（虽然这对当前请求已无影响，但保持状态清洁）
+            # 但在这里，最重要的任务是确保上传到 MemOS 的内容是纯净的
+            
             if not user_message:
                 return
 
@@ -307,32 +329,32 @@ class MemosIntegratorPlugin(Star):
                     # 未达到上传阈值，不执行上传
                     return
 
-                async def _save_memory_task(msgs, sess_id, conv_id):
-                    """后台批量保存任务"""
-                    try:
-                        # 直接调用 add_message，它支持 messages 列表参数
-                        result = await self.memory_manager.add_message(
-                            messages=msgs,
-                            user_id=sess_id,
-                            conversation_id=conv_id
-                        )
-                        if result.get("success"):
-                            logger.info(f"成功批量保存 {len(msgs)//2} 轮对话到MemOS，会话ID: {sess_id}")
-                        else:
-                            logger.warning(f"批量保存到MemOS失败: {result.get('error')}")
-                    except Exception as e:
-                        logger.error(f"批量保存记忆时出错: {e}")
+            async def _save_memory_task(msgs, sess_id, conv_id):
+                """后台批量保存任务"""
+                try:
+                    # 直接调用 add_message，它支持 messages 列表参数
+                    result = await self.memory_manager.add_message(
+                        messages=msgs,
+                        user_id=sess_id,
+                        conversation_id=conv_id
+                    )
+                    if result.get("success"):
+                        logger.info(f"成功批量保存 {len(msgs)//2} 轮对话到MemOS，会话ID: {sess_id}")
+                    else:
+                        logger.warning(f"批量保存到MemOS失败: {result.get('error')}")
+                except Exception as e:
+                    logger.error(f"批量保存记忆时出错: {e}")
 
-                # 提交后台任务
-                task = asyncio.create_task(_save_memory_task(messages_to_upload, session_id, conversation_id))
-                
-                def task_done_callback(t: asyncio.Task):
-                    try:
-                        t.result()
-                    except Exception as e:
-                        logger.error(f"后台记忆保存任务异常: {e}", exc_info=True)
+            # 提交后台任务
+            task = asyncio.create_task(_save_memory_task(messages_to_upload, session_id, conversation_id))
+            
+            def task_done_callback(t: asyncio.Task):
+                try:
+                    t.result()
+                except Exception as e:
+                    logger.error(f"后台记忆保存任务异常: {e}", exc_info=True)
 
-                task.add_done_callback(task_done_callback)
+            task.add_done_callback(task_done_callback)
             
         except Exception as e:
             logger.error(f"处理记忆保存流程失败: {e}")

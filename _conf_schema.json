@@ -38,10 +38,17 @@
     "default": "system"
   },
   "private_injection_type": {
-    "type": "string",
-    "description": "私聊记忆注入类型",
-    "options": ["user", "system"],
-    "hint": "user: 将记忆临时注入到用户prompt中; system: 将记忆作为system消息添加到上下文中",
-    "default": "user"
-  }
+  "type": "string",
+  "description": "私聊记忆注入类型",
+  "options": ["user", "system"],
+  "hint": "user: 将记忆临时注入到用户prompt中; system: 将记忆作为system消息添加到上下文中",
+  "default": "user"
+},
+"memory_scope": {
+  "type": "string",
+  "description": "记忆作用域",
+  "options": ["isolated", "global"],
+  "hint": "isolated: 隔离模式(群聊/私聊记忆分离); global: 全局模式(基于用户ID，跨群/私聊记忆互通)",
+  "default": "isolated"
+}
 }
