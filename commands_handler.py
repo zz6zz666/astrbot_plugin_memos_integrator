@@ -10,6 +10,15 @@ def ts_to_beijing(ts):
         return dt.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
     return str(ts)
 
+def parse_feedback_command(message_str: str) -> tuple:
+    """解析添加反馈命令，提取反馈内容"""
+    # 去掉命令前缀
+    content = message_str.replace("加反馈", "", 1).strip()
+    if not content:
+        return None, None, "请输入反馈内容，例如：/加反馈 不对，我们现在改成一线城市餐补150元每天，住宿补贴700元每天；二三线城市还是原来那样。"
+    
+    return None, content, None
+
 
 class CommandsHandler:
 
@@ -63,3 +72,11 @@ class CommandsHandler:
             lines.append(f"{note}")
 
         return "\n".join(lines)
+
+    @classmethod
+    def generate_feedback_result(cls, success: bool, error_msg: str = None) -> str:
+        """生成添加反馈的结果报告"""
+        if success:
+            return "✅ 反馈添加成功，我们会根据您的反馈修正记忆内容"
+        else:
+            return f"❌ 反馈添加失败: {error_msg}"

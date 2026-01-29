@@ -13,7 +13,7 @@ from astrbot.api.star import Context, Star, register, StarTools
 from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
 from .memory_manager import MemoryManager
-from .commands_handler import CommandsHandler
+from .commands_handler import CommandsHandler, parse_feedback_command
 
 # 主插件类
 @register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.6.0")
@@ -399,4 +399,45 @@ class MemosIntegratorPlugin(Star):
         except Exception as e:
             logger.error(f"查询用户记忆失败: {e}")
             yield event.plain_result(f"查询用户记忆失败: {str(e)}")
+            return
+
+    @filter.command("加反馈")
+    async def add_feedback_command(self, event: AstrMessageEvent):
+        '''这是一个添加反馈的指令''' # 这是 handler 的描述，将会被解析方便用户了解插件内容。非常建议填写。
+        message_str = event.message_str # 获取消息的纯文本内容
+        if message_str.strip() == "加反馈":
+            yield event.plain_result("请输入反馈内容，例如：/加反馈 不对，我们现在改成一线城市餐补150元每天，住宿补贴700元每天；二三线城市还是原来那样。")
+            return
+        
+        # 解析反馈命令
+        _, feedback_content, error = parse_feedback_command(message_str)
+        if error:
+            yield event.plain_result(error)
+            return
+
+        logger.info(f"触发添加反馈指令，反馈内容: {feedback_content}")
+        
+        if self.memory_manager is None:
+            yield event.plain_result("MemOS记忆管理器未初始化，请检查配置")
+            return
+
+        session_id = self._get_session_id(event)
+        conversation_id = await self._get_conversation_id(event)
+        
+        try:
+            # 使用memory_manager的方法添加反馈
+            result = await self.memory_manager.add_feedback(feedback_content, session_id, conversation_id)
+
+            if not result.get("success"):
+                logger.error(f"添加反馈失败: {result.get('error')}")
+                yield event.plain_result(f"添加反馈失败: {result.get('error')}")
+                return
+
+            # 生成反馈结果报告
+            report = CommandsHandler.generate_feedback_result(result.get('success'), result.get('error'))
+
+            yield event.plain_result(f"{report}") # 发送一条纯文本消息
+        except Exception as e:
+            logger.error(f"添加反馈失败: {e}")
+            yield event.plain_result(f"添加反馈失败: {str(e)}")
             return

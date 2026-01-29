@@ -8,6 +8,7 @@
 |------------|------------------------------|
 | `/查记忆 <查询内容>`   | 搜索与指定内容相关的记忆     |
 | `/用户画像` | 生成用户的人物关键词画像报告 |
+| `/加反馈 <反馈内容>` | 给指定消息添加反馈，描述需要如何修正 |
 
 ## 🔍 核心特性说明
 
@@ -151,6 +152,7 @@ MemoryManager 直接使用 HTTP API 与 MemOS 交互，无需额外的 SDK 依�
 
 - `POST /add/message` - 添加对话消息
 - `POST /search/memory` - 搜索相关记忆
+- `POST /add/feedback` - 添加反馈到消息
 
 ### 记忆管理器 API
 
@@ -162,6 +164,7 @@ MemoryManager 直接使用 HTTP API 与 MemOS 交互，无需额外的 SDK 依�
 - `retrieve_relevant_memories()`: 检索相关记忆
 - `update_memory()`: 更新记忆内容
 - `inject_memory_to_prompt()`: 将记忆注入到提示词
+- `add_feedback()`: 添加反馈到消息
 
 ### 记忆模板
 

@@ -327,3 +327,25 @@ class MemoryManager:
         except Exception as e:
             logger.error(f"注入记忆到提示时出错: {e}")
             return original_prompt
+
+    async def add_feedback(self, feedback_content: str, user_id: str, conversation_id: str = None) -> Dict[str, Any]:
+        """添加反馈到消息
+
+        Args:
+            feedback_content: 反馈内容
+            user_id: 用户ID
+            conversation_id: 对话ID（可选）
+
+        Returns:
+            操作结果字典
+        """
+        data = {
+            "user_id": user_id,
+            "conversation_id": conversation_id,
+            "feedback_content": feedback_content
+        }
+
+        result = await self._make_request("/add/feedback", data)
+        if result.get("success"):
+            logger.info(f"成功添加反馈,用户ID: {user_id}, 对话ID: {conversation_id}, 反馈内容: {feedback_content[:50]}...")
+        return result
