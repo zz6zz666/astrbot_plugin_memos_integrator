@@ -2,7 +2,7 @@
 Pydantic数据模型定义
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List, Literal
 from pydantic import BaseModel, Field
 
 
@@ -72,3 +72,18 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="状态")
     version: str = Field(..., description="版本")
     web_enabled: bool = Field(..., description="Web是否启用")
+
+
+class ApplySwitchRequest(BaseModel):
+    """应用开关到所有会话请求模型"""
+    switch_type: Literal["memory_injection", "new_session_upload"]
+    enabled: bool
+
+
+class ApplySwitchResponse(BaseModel):
+    """应用开关到所有会话响应模型"""
+    success: bool = Field(..., description="是否成功")
+    total_sessions: int = Field(..., description="总会话数")
+    updated_sessions: int = Field(..., description="成功更新的会话数")
+    failed_sessions: List[str] = Field(default=[], description="失败的会话ID列表")
+    message: str = Field(..., description="消息")

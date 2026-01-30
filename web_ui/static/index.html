@@ -12,9 +12,12 @@
         <!-- 顶部导航栏 -->
         <header class="app-header">
             <div class="header-left">
+                <button id="sidebar-toggle" class="btn-icon sidebar-toggle-btn" title="折叠侧栏">
+                    <i class="fas fa-bars"></i>
+                </button>
                 <h1 class="app-title">
                     <i class="fas fa-brain"></i>
-                    MemOS Web管理界面
+                    <span>MemOS Web管理界面</span>
                 </h1>
                 <div class="app-version">v1.0.0</div>
             </div>
@@ -23,7 +26,7 @@
                     <i class="fas fa-moon"></i>
                 </button>
                 <button id="logout-btn" class="btn btn-secondary" style="display: none;">
-                    <i class="fas fa-sign-out-alt"></i> 退出
+                    <i class="fas fa-sign-out-alt"></i> <span>退出</span>
                 </button>
             </div>
         </header>
@@ -67,15 +70,20 @@
             <!-- 主界面 -->
             <div id="main-screen" class="main-container" style="display: none;">
                 <!-- 侧边栏 -->
-                <aside class="sidebar">
+                <aside class="sidebar" id="sidebar">
                     <div class="sidebar-header">
-                        <h3><i class="fas fa-robot"></i> Bot列表</h3>
-                        <div class="search-box">
+                        <div class="sidebar-title">
+                            <h3><i class="fas fa-robot"></i> Bot列表</h3>
+                            <button id="bot-list-toggle" class="btn-icon sidebar-toggle-btn" title="折叠Bot列表">
+                                <i class="fas fa-chevron-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="sidebar-content" id="bot-list-section">
+                        <div class="search-box" style="margin-bottom: 1rem;">
                             <input type="text" id="bot-search" placeholder="搜索Bot...">
                             <i class="fas fa-search"></i>
                         </div>
-                    </div>
-                    <div class="sidebar-content">
                         <div id="bot-list" class="bot-list">
                             <!-- Bot列表将通过JavaScript动态加载 -->
                             <div class="loading-state">
@@ -84,7 +92,17 @@
                             </div>
                         </div>
                     </div>
+                    <div class="sidebar-footer">
+                        <div class="memos-key-management">
+                            <div class="sidebar-title">
+                                <h3><i class="fas fa-key"></i> MemOS 密钥管理</h3>
+                            </div>
+                        </div>
+                    </div>
                 </aside>
+
+                <!-- 移动端侧栏遮罩层 -->
+                <div class="sidebar-overlay" id="sidebar-overlay"></div>
 
                 <!-- 主内容区 -->
                 <div class="content-area">
@@ -98,9 +116,6 @@
                             </div>
                         </div>
                         <div class="toolbar-right">
-                            <button id="save-btn" class="btn btn-primary" disabled>
-                                <i class="fas fa-save"></i> 保存
-                            </button>
                             <button id="reset-btn" class="btn btn-secondary" disabled>
                                 <i class="fas fa-undo"></i> 重置
                             </button>
@@ -117,45 +132,59 @@
                             </div>
                             <div class="panel-body">
                                 <div class="config-form">
-                                    <div class="form-group">
-                                        <label for="bot-custom-user-id">
-                                            <i class="fas fa-id-card"></i> MemOS user_id
-                                        </label>
-                                        <input type="text" id="bot-custom-user-id"
-                                               placeholder="留空则使用默认生成规则 (bot名称:会话类型:会话ID)">
-                                        <div class="form-hint">
-                                            替代默认的用户ID生成方式，用于MemOS API请求
+                                    <div class="desktop-horizontal-row">
+                                        <div class="form-group desktop-horizontal-item">
+                                            <label for="bot-custom-user-id">
+                                                <i class="fas fa-id-card"></i> MemOS user_id
+                                            </label>
+                                            <input type="text" id="bot-custom-user-id"
+                                                   placeholder="留空则使用默认生成规则 (bot名称:会话类型:会话ID)">
+                                            <div class="form-hint">
+                                                替代默认的用户ID生成方式，用于MemOS API请求
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group desktop-horizontal-item">
+                                            <label>
+                                                <i class="fas fa-memory"></i> 记忆注入开关
+                                            </label>
+                                            <div class="toggle-switch">
+                                                <input type="checkbox" id="bot-memory-injection" checked>
+                                                <label for="bot-memory-injection" class="toggle-label">
+                                                    <span class="toggle-handle"></span>
+                                                </label>
+                                            </div>
+                                            <div class="form-hint">
+                                                控制该Bot是否启用MemOS记忆注入
+                                            </div>
+                                            <button id="apply-memory-injection-to-all" class="btn btn-small btn-secondary" style="margin-top: 8px;">
+                                                <i class="fas fa-sync-alt"></i> 应用到全部会话
+                                            </button>
+                                        </div>
+
+                                        <div class="form-group desktop-horizontal-item">
+                                            <label>
+                                                <i class="fas fa-upload"></i> 新会话上传开关
+                                            </label>
+                                            <div class="toggle-switch">
+                                                <input type="checkbox" id="bot-new-session-upload" checked>
+                                                <label for="bot-new-session-upload" class="toggle-label">
+                                                    <span class="toggle-handle"></span>
+                                                </label>
+                                            </div>
+                                            <div class="form-hint">
+                                                控制该Bot是否启用新会话数据上传至MemOS
+                                            </div>
+                                            <button id="apply-new-session-upload-to-all" class="btn btn-small btn-secondary" style="margin-top: 8px;">
+                                                <i class="fas fa-sync-alt"></i> 应用到全部会话
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label>
-                                            <i class="fas fa-memory"></i> 记忆注入开关
-                                        </label>
-                                        <div class="toggle-switch">
-                                            <input type="checkbox" id="bot-memory-injection" checked>
-                                            <label for="bot-memory-injection" class="toggle-label">
-                                                <span class="toggle-handle"></span>
-                                            </label>
-                                        </div>
-                                        <div class="form-hint">
-                                            控制该Bot是否启用MemOS记忆注入
-                                        </div>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label>
-                                            <i class="fas fa-upload"></i> 新会话上传开关
-                                        </label>
-                                        <div class="toggle-switch">
-                                            <input type="checkbox" id="bot-new-session-upload" checked>
-                                            <label for="bot-new-session-upload" class="toggle-label">
-                                                <span class="toggle-handle"></span>
-                                            </label>
-                                        </div>
-                                        <div class="form-hint">
-                                            控制该Bot是否启用新会话数据上传至MemOS
-                                        </div>
+                                    <div class="form-actions">
+                                        <button id="save-bot-config-btn" class="btn btn-small">
+                                            <i class="fas fa-save"></i> 保存Bot配置
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -174,10 +203,10 @@
                                         <i class="fas fa-search"></i>
                                     </div>
                                     <button id="expand-all-btn" class="btn btn-small">
-                                        <i class="fas fa-expand-alt"></i> 全部展开
+                                        <i class="fas fa-expand-alt"></i> <span>全部展开</span>
                                     </button>
                                     <button id="collapse-all-btn" class="btn btn-small">
-                                        <i class="fas fa-compress-alt"></i> 全部折叠
+                                        <i class="fas fa-compress-alt"></i> <span>全部折叠</span>
                                     </button>
                                 </div>
                             </div>
@@ -281,13 +310,13 @@
         <footer class="app-footer">
             <div class="footer-content">
                 <div class="footer-left">
-                    <p>MemOS记忆集成插件 &copy; 2024</p>
+                    <p>MemOS记忆集成插件 &copy; 2026</p>
                 </div>
                 <div class="footer-right">
                     <div class="connection-status">
-                        <i class="fas fa-circle status-connected" style="display: none;"></i>
-                        <i class="fas fa-circle status-disconnected"></i>
-                        <span id="connection-text">未连接</span>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
+                        <i class="fas fa-star"></i>
                     </div>
                 </div>
             </div>

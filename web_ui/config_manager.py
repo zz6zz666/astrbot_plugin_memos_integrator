@@ -10,22 +10,26 @@ from datetime import datetime
 from astrbot.api import logger
 
 from .data_models import BotConfig, SessionConfig
+from .data_fetcher import DataFetcher
 
 
 class ConfigManager:
     """配置管理器"""
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, plugin_instance=None):
         """
         初始化ConfigManager
 
         Args:
             data_dir: 数据目录路径
+            plugin_instance: 插件实例（可选，用于数据库同步）
         """
         self.data_dir = data_dir
+        self.plugin_instance = plugin_instance
         self.config_file = data_dir / "web_config.json"
         self.config_backup_dir = data_dir / "backups"
         self.config_data = self._load_config()
+        self._in_sync = False  # 防止重入标志
 
     def _load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
@@ -36,6 +40,9 @@ class ConfigManager:
                 "bots": {}
             }
             self._save_config(default_config)
+            # 如果插件实例存在，从数据库初始化配置
+            if self.plugin_instance:
+                self.sync_with_database()
             return default_config
 
         try:
@@ -209,6 +216,142 @@ class ConfigManager:
             logger.error(f"删除会话配置失败: {e}")
             return False
 
+    async def async_sync_with_database(self) -> None:
+        """
+        异步同步配置文件与数据库状态
+        从数据库获取所有bot和会话，为新增的bot和会话创建默认配置
+        """
+        if not self.plugin_instance:
+            logger.warning("插件实例未设置，无法同步数据库")
+            return
+
+        # 防止重入
+        if self._in_sync:
+            logger.debug("数据库同步正在进行中，跳过")
+            return
+
+        self._in_sync = True
+        try:
+            # 临时创建DataFetcher（不传递config_manager以避免递归）
+            from .data_fetcher import DataFetcher
+            data_fetcher = DataFetcher(self.plugin_instance)
+
+            # 获取数据库中的所有bot
+            bots = await data_fetcher.get_bots()
+
+            # 检查每个bot是否存在配置中，不存在则添加默认配置
+            for bot in bots:
+                bot_id = bot.id
+                if bot_id not in self.config_data["bots"]:
+                    # 添加bot配置（包含元数据）
+                    self.config_data["bots"][bot_id] = {
+                        "custom_user_id": "",
+                        "memory_injection_enabled": True,
+                        "new_session_upload_enabled": True,
+                        "name": bot.name,
+                        "type": bot.type,
+                        "conversations": {}
+                    }
+                    logger.info(f"新增Bot配置: {bot.name} ({bot_id})")
+                else:
+                    # 更新元数据（确保name和type存在）
+                    bot_data = self.config_data["bots"][bot_id]
+                    if "name" not in bot_data:
+                        bot_data["name"] = bot.name
+                    if "type" not in bot_data:
+                        bot_data["type"] = bot.type
+
+            # 为每个bot同步会话
+            for bot in bots:
+                bot_id = bot.id
+                # 获取该bot的所有会话
+                sessions = await data_fetcher.get_sessions(bot_id)
+                bot_data = self.config_data["bots"].get(bot_id)
+                if not bot_data:
+                    continue
+                if "conversations" not in bot_data:
+                    bot_data["conversations"] = {}
+
+                for session in sessions:
+                    session_id = session.id
+                    if session_id not in bot_data["conversations"]:
+                        # 添加会话配置（包含元数据）
+                        bot_data["conversations"][session_id] = {
+                            "custom_user_id": "",
+                            "memory_injection_enabled": True,
+                            "new_session_upload_enabled": True,
+                            "unified_msg_origin": session.unified_msg_origin
+                        }
+                        logger.info(f"新增会话配置: {bot.name}/{session_id}")
+
+            # 保存更新后的配置
+            self._save_config(self.config_data)
+            logger.info("配置文件已同步数据库")
+
+        except Exception as e:
+            logger.error(f"同步数据库失败: {e}")
+        finally:
+            self._in_sync = False
+
+    def sync_with_database(self) -> None:
+        """同步数据库（同步包装）"""
+        import asyncio
+        try:
+            # 尝试获取当前事件循环
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # 事件循环正在运行，创建后台任务异步执行同步
+                # 注意：我们不等待任务完成，同步方法立即返回
+                task = asyncio.create_task(self.async_sync_with_database())
+                # 添加错误回调记录错误
+                def log_error(task):
+                    try:
+                        task.result()
+                    except Exception as e:
+                        logger.error(f"后台数据库同步任务失败: {e}")
+                task.add_done_callback(log_error)
+                logger.info("已创建后台任务同步数据库")
+            else:
+                # 事件循环未运行，可以直接运行
+                asyncio.run(self.async_sync_with_database())
+        except RuntimeError:
+            # 没有事件循环，创建新的
+            asyncio.run(self.async_sync_with_database())
+        except Exception as e:
+            logger.error(f"同步数据库失败: {e}")
+
+    def ensure_session_config(self, bot_id: str, session_id: str, unified_msg_origin: str = "") -> None:
+        """
+        确保会话配置存在，如果不存在则从bot配置复制创建
+        """
+        if bot_id not in self.config_data["bots"]:
+            # Bot不存在，先创建bot配置（使用默认值）
+            self.config_data["bots"][bot_id] = {
+                "custom_user_id": "",
+                "memory_injection_enabled": True,
+                "new_session_upload_enabled": True,
+                "name": bot_id,  # 默认名称
+                "type": "unknown",
+                "conversations": {}
+            }
+            logger.info(f"自动创建Bot配置: {bot_id}")
+
+        bot_data = self.config_data["bots"][bot_id]
+        if "conversations" not in bot_data:
+            bot_data["conversations"] = {}
+
+        if session_id not in bot_data["conversations"]:
+            # 从bot配置复制，并添加unified_msg_origin
+            bot_config = self.get_bot_config(bot_id)
+            bot_data["conversations"][session_id] = {
+                "custom_user_id": "",
+                "memory_injection_enabled": bot_config.memory_injection_enabled,
+                "new_session_upload_enabled": bot_config.new_session_upload_enabled,
+                "unified_msg_origin": unified_msg_origin
+            }
+            self._save_config(self.config_data)
+            logger.info(f"自动创建会话配置: {bot_id}/{session_id}")
+
     def get_all_bot_ids(self) -> list[str]:
         """获取所有Bot ID"""
         return list(self.config_data["bots"].keys())
@@ -243,3 +386,44 @@ class ConfigManager:
                 return False
 
         return True
+
+    def apply_switch_to_all_sessions(self, bot_id: str, switch_type: str, enabled: bool) -> Dict[str, Any]:
+        """将指定开关状态应用到所有会话
+
+        Args:
+            bot_id: Bot ID
+            switch_type: 开关类型，'memory_injection' 或 'new_session_upload'
+            enabled: 开关状态，True表示开启，False表示关闭
+
+        Returns:
+            包含统计信息的字典: total, updated, failed
+        """
+        if bot_id not in self.config_data["bots"]:
+            return {"total": 0, "updated": 0, "failed": []}
+
+        sessions = self.config_data["bots"][bot_id].get("conversations", {})
+        total = len(sessions)
+        updated = 0
+        failed = []
+
+        for session_id in sessions.keys():
+            try:
+                # 获取当前会话配置
+                session_config = self.get_session_config(bot_id, session_id)
+
+                # 只更新指定开关，保持其他字段不变
+                if switch_type == "memory_injection":
+                    session_config.memory_injection_enabled = enabled
+                else:  # "new_session_upload"
+                    session_config.new_session_upload_enabled = enabled
+
+                # 保存更新后的配置
+                if self.save_session_config(bot_id, session_id, session_config):
+                    updated += 1
+                else:
+                    failed.append(session_id)
+            except Exception as e:
+                logger.error(f"更新会话 {session_id} 开关失败: {e}")
+                failed.append(session_id)
+
+        return {"total": total, "updated": updated, "failed": failed}

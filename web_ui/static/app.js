@@ -10,6 +10,7 @@ class MemOSWebUI {
         this.sessionConfigs = {};
         this.isAuthenticated = false;
         this.unsavedChanges = false;
+        this.applyingToAllInProgress = false;
 
         // 初始化事件监听
         this.initEventListeners();
@@ -19,6 +20,9 @@ class MemOSWebUI {
 
         // 初始化主题
         this.initTheme();
+
+        // 初始化侧边栏
+        this.initSidebar();
     }
 
     // 初始化事件监听器
@@ -38,11 +42,23 @@ class MemOSWebUI {
         document.getElementById('bot-search')?.addEventListener('input', (e) => this.searchBots(e.target.value));
         document.getElementById('session-search')?.addEventListener('input', (e) => this.searchSessions(e.target.value));
 
+        // Bot列表折叠功能
+        document.getElementById('bot-list-toggle')?.addEventListener('click', () => this.toggleBotList());
+
         // 操作按钮
-        document.getElementById('save-btn')?.addEventListener('click', () => this.saveAllConfigs());
+        document.getElementById('save-bot-config-btn')?.addEventListener('click', async () => {
+            try {
+                await this.saveBotConfig();
+                this.showSaveStatus('Bot配置保存成功', 'success');
+            } catch (error) {
+                this.showSaveStatus(`保存失败: ${error.message}`, 'error');
+            }
+        });
         document.getElementById('reset-btn')?.addEventListener('click', () => this.resetConfigs());
         document.getElementById('expand-all-btn')?.addEventListener('click', () => this.expandAllSessions());
         document.getElementById('collapse-all-btn')?.addEventListener('click', () => this.collapseAllSessions());
+        document.getElementById('apply-memory-injection-to-all')?.addEventListener('click', () => this.applyMemoryInjectionToAll());
+        document.getElementById('apply-new-session-upload-to-all')?.addEventListener('click', () => this.applyNewSessionUploadToAll());
 
         // Bot配置输入监听
         document.getElementById('bot-custom-user-id')?.addEventListener('input', () => this.markUnsaved());
@@ -54,6 +70,16 @@ class MemOSWebUI {
             if (this.unsavedChanges) {
                 e.preventDefault();
                 e.returnValue = '您有未保存的更改，确定要离开吗？';
+            }
+        });
+
+        // 侧边栏切换
+        document.getElementById('sidebar-toggle')?.addEventListener('click', () => this.toggleSidebar());
+
+        // 遮罩层点击关闭侧栏
+        document.getElementById('sidebar-overlay')?.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                this.closeSidebar();
             }
         });
     }
@@ -193,11 +219,154 @@ class MemOSWebUI {
         document.getElementById('logout-btn').style.display = 'none';
     }
 
+    // 初始化侧边栏
+    initSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-screen');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const overlay = document.getElementById('sidebar-overlay');
+
+        // 检查窗口宽度
+        const checkWindowWidth = () => {
+            if (window.innerWidth <= 768) {
+                // 移动端：使用expanded类控制显示，移除collapsed类
+                sidebar.classList.remove('collapsed');
+                mainContainer.classList.remove('sidebar-collapsed');
+                // 确保遮罩层和变暗效果根据expanded类同步
+                const isExpanded = sidebar.classList.contains('expanded');
+                if (overlay) {
+                    overlay.classList.toggle('active', isExpanded);
+                }
+                mainContainer.classList.toggle('sidebar-expanded', isExpanded);
+                // 如果侧栏展开，禁止body滚动
+                document.body.style.overflow = isExpanded ? 'hidden' : '';
+            } else {
+                // 桌面端：使用collapsed类控制显示，移除expanded类
+                sidebar.classList.remove('expanded');
+                // 桌面端隐藏遮罩层和移除变暗效果
+                if (overlay) {
+                    overlay.classList.remove('active');
+                }
+                mainContainer.classList.remove('sidebar-expanded');
+                // 桌面端总是允许body滚动
+                document.body.style.overflow = '';
+            }
+        };
+
+        // 初始检查
+        checkWindowWidth();
+
+        // 窗口大小变化监听
+        window.addEventListener('resize', () => {
+            checkWindowWidth();
+            this.updateLayoutBasedOnContentWidth();
+        });
+    }
+
+    // 切换侧边栏
+    toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-screen');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const overlay = document.getElementById('sidebar-overlay');
+        const icon = sidebarToggle.querySelector('i');
+        const footer = document.querySelector('.app-footer');
+
+        // 移动端逻辑
+        if (window.innerWidth <= 768) {
+            const isExpanding = !sidebar.classList.contains('expanded');
+            sidebar.classList.toggle('expanded');
+            // 移动端确保页脚没有左边距类
+            if (footer) {
+                footer.classList.remove('sidebar-collapsed-footer');
+            }
+            // 控制遮罩层和内容变暗
+            if (overlay) {
+                overlay.classList.toggle('active', isExpanding);
+            }
+            mainContainer.classList.toggle('sidebar-expanded', isExpanding);
+            // 控制body滚动
+            document.body.style.overflow = isExpanding ? 'hidden' : '';
+        } else {
+            // 桌面端逻辑
+            sidebar.classList.toggle('collapsed');
+            mainContainer.classList.toggle('sidebar-collapsed');
+            // 切换页脚类
+            if (footer) {
+                footer.classList.toggle('sidebar-collapsed-footer');
+            }
+            // 桌面端隐藏遮罩层
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+            mainContainer.classList.remove('sidebar-expanded');
+            // 桌面端恢复body滚动
+            document.body.style.overflow = '';
+        }
+
+        // 图标始终为三根杠
+        icon.className = 'fas fa-bars';
+        // 更新title提示
+        if (window.innerWidth <= 768) {
+            // 移动端：有expanded类时显示，无expanded类时隐藏
+            sidebarToggle.title = sidebar.classList.contains('expanded') ? '折叠侧栏' : '展开侧栏';
+        } else {
+            // 桌面端：无collapsed类时显示，有collapsed类时隐藏
+            sidebarToggle.title = sidebar.classList.contains('collapsed') ? '展开侧栏' : '折叠侧栏';
+        }
+
+        // 延迟更新布局，等待CSS过渡完成
+        setTimeout(() => {
+            this.updateLayoutBasedOnContentWidth();
+        }, 300);
+    }
+
+    // 关闭侧边栏（移动端）
+    closeSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const mainContainer = document.getElementById('main-screen');
+        const overlay = document.getElementById('sidebar-overlay');
+        const footer = document.querySelector('.app-footer');
+
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('expanded');
+            if (overlay) {
+                overlay.classList.remove('active');
+            }
+            mainContainer.classList.remove('sidebar-expanded');
+            // 移动端确保页脚没有左边距类
+            if (footer) {
+                footer.classList.remove('sidebar-collapsed-footer');
+            }
+            // 恢复body滚动
+            document.body.style.overflow = '';
+        } else {
+            // 桌面端折叠侧栏
+            sidebar.classList.add('collapsed');
+            mainContainer.classList.add('sidebar-collapsed');
+            if (footer) {
+                footer.classList.add('sidebar-collapsed-footer');
+            }
+            // 桌面端恢复body滚动
+            document.body.style.overflow = '';
+        }
+
+        // 延迟更新布局，等待CSS过渡完成
+        setTimeout(() => {
+            this.updateLayoutBasedOnContentWidth();
+        }, 300);
+    }
+
     // 显示主界面
     showMainScreen() {
         document.getElementById('login-screen').style.display = 'none';
         document.getElementById('main-screen').style.display = 'flex';
         document.getElementById('logout-btn').style.display = 'block';
+
+        // 延迟更新布局，确保DOM已渲染
+        setTimeout(() => {
+            this.updateLayoutBasedOnContentWidth();
+        }, 100);
     }
 
     // API请求封装
@@ -224,7 +393,23 @@ class MemOSWebUI {
                 throw new Error('会话已过期，请重新登录');
             }
             const error = await response.json().catch(() => ({ detail: '请求失败' }));
-            throw new Error(error.detail || `HTTP ${response.status}`);
+            let errorMessage = '请求失败';
+            if (error.detail) {
+                if (Array.isArray(error.detail)) {
+                    // 处理验证错误数组
+                    errorMessage = error.detail.map(err => {
+                        const field = err.loc?.join('.') || '未知字段';
+                        return `${field}: ${err.msg}`;
+                    }).join('; ');
+                } else if (typeof error.detail === 'string') {
+                    errorMessage = error.detail;
+                } else {
+                    errorMessage = JSON.stringify(error.detail);
+                }
+            } else {
+                errorMessage = `HTTP ${response.status}`;
+            }
+            throw new Error(errorMessage);
         }
 
         return await response.json();
@@ -291,12 +476,26 @@ class MemOSWebUI {
         
         // Attach click event listeners programmatically instead of inline handlers
         document.querySelectorAll('.bot-item').forEach(item => {
-            item.addEventListener('click', () => {
+            item.addEventListener('click', async () => {
                 const botId = item.getAttribute('data-bot-id');
                 const botName = item.getAttribute('data-bot-name');
+
+                // 检查是否有未保存的更改
+                if (this.unsavedChanges) {
+                    if (!confirm('您有未保存的更改，确定要切换Bot吗？未保存的更改将丢失。')) {
+                        return;
+                    }
+                }
+
                 this.selectBot(botId, botName);
             });
         });
+
+        // 首次加载时自动选择第一个Bot
+        if (!this.currentBotId && bots.length > 0) {
+            const firstBot = bots[0];
+            this.selectBot(firstBot.id, firstBot.name);
+        }
     }
 
     // 选择Bot
@@ -320,8 +519,7 @@ class MemOSWebUI {
         document.getElementById('bot-config-panel').style.display = 'block';
         document.getElementById('sessions-panel').style.display = 'block';
 
-        // 启用保存/重置按钮
-        document.getElementById('save-btn').disabled = false;
+        // 启用重置按钮
         document.getElementById('reset-btn').disabled = false;
 
         // 加载Bot配置
@@ -408,6 +606,8 @@ class MemOSWebUI {
         let html = '';
         sessions.forEach(session => {
             const sessionId = this.escapeHtml(session.id);
+            const botConfig = this.botConfigs[botId] || {};
+            const placeholder = botConfig.custom_user_id ? botConfig.custom_user_id : `${this.currentBotName}:${sessionId}`;
 
             html += `
                 <div class="session-config-panel" data-session-id="${sessionId}">
@@ -417,57 +617,64 @@ class MemOSWebUI {
                             <span class="session-id">${sessionId}</span>
                         </h4>
                         <div class="session-actions">
-                            <button class="btn btn-small btn-toggle-session" data-action="toggle">
+                            <button class="btn btn-small btn-user-profile" data-session-id="${sessionId}" title="用户画像" onclick="window.ui.viewUserProfile('${sessionId}'); event.stopPropagation();">
+                                <i class="fas fa-user"></i>
+                            </button>
+                            <button class="btn btn-small btn-toggle-session" data-action="toggle" onclick="window.ui.toggleSession('${sessionId}'); event.stopPropagation();">
                                 <i class="fas fa-chevron-down"></i>
                             </button>
                         </div>
                     </div>
-                    <div class="session-body" style="display: none;">
+                    <div class="session-body" style="display: block;">
                         <div class="config-form">
-                            <div class="form-group">
-                                <label>
-                                    <i class="fas fa-id-card"></i> MemOS user_id
-                                </label>
-                                <input type="text" class="session-custom-user-id"
-                                       data-session-id="${sessionId}"
-                                       placeholder="${this.currentBotName}:${sessionId}"
-                                       oninput="window.ui.markUnsaved()">
-                                <div class="form-hint">
-                                    优先级：会话配置 > Bot配置
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>
-                                    <i class="fas fa-memory"></i> 记忆注入开关
-                                </label>
-                                <div class="toggle-switch">
-                                    <input type="checkbox" class="session-memory-injection"
-                                           data-session-id="${sessionId}"
-                                           onchange="window.ui.markUnsaved()" checked>
-                                    <label class="toggle-label">
-                                        <span class="toggle-handle"></span>
+                            <div class="desktop-horizontal-row">
+                                <div class="form-group desktop-horizontal-item">
+                                    <label>
+                                        <i class="fas fa-id-card"></i> MemOS user_id
                                     </label>
-                                </div>
-                                <div class="form-hint">
-                                    可覆盖Bot配置，控制该会话是否启用记忆注入
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <label>
-                                    <i class="fas fa-upload"></i> 新会话上传开关
-                                </label>
-                                <div class="toggle-switch">
-                                    <input type="checkbox" class="session-new-session-upload"
+                                    <input type="text" class="session-custom-user-id"
                                            data-session-id="${sessionId}"
-                                           onchange="window.ui.markUnsaved()" checked>
-                                    <label class="toggle-label">
-                                        <span class="toggle-handle"></span>
-                                    </label>
+                                           placeholder="${placeholder}"
+                                           oninput="window.ui.markUnsaved()">
+                                    <div class="form-hint">
+                                        优先级：会话配置 > Bot配置
+                                    </div>
                                 </div>
-                                <div class="form-hint">
-                                    可覆盖Bot配置，控制该会话是否启用新会话上传
+
+                                <div class="form-group desktop-horizontal-item">
+                                    <label for="session-memory-injection-${sessionId}">
+                                        <i class="fas fa-memory"></i> 记忆注入开关
+                                    </label>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" class="session-memory-injection"
+                                               id="session-memory-injection-${sessionId}"
+                                               data-session-id="${sessionId}"
+                                               onchange="window.ui.markUnsaved()">
+                                        <label for="session-memory-injection-${sessionId}" class="toggle-label">
+                                            <span class="toggle-handle"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-hint">
+                                        可覆盖Bot配置，控制该会话是否启用记忆注入
+                                    </div>
+                                </div>
+
+                                <div class="form-group desktop-horizontal-item">
+                                    <label for="session-new-session-upload-${sessionId}">
+                                        <i class="fas fa-upload"></i> 新会话上传开关
+                                    </label>
+                                    <div class="toggle-switch">
+                                        <input type="checkbox" class="session-new-session-upload"
+                                               id="session-new-session-upload-${sessionId}"
+                                               data-session-id="${sessionId}"
+                                               onchange="window.ui.markUnsaved()">
+                                        <label for="session-new-session-upload-${sessionId}" class="toggle-label">
+                                            <span class="toggle-handle"></span>
+                                        </label>
+                                    </div>
+                                    <div class="form-hint">
+                                        可覆盖Bot配置，控制该会话是否启用新会话上传
+                                    </div>
                                 </div>
                             </div>
 
@@ -529,13 +736,32 @@ class MemOSWebUI {
         const body = sessionElement.querySelector('.session-body');
         const icon = sessionElement.querySelector('.btn-toggle-session i');
 
-        if (body.style.display === 'none') {
-            body.style.display = 'block';
-            icon.className = 'fas fa-chevron-up';
-        } else {
-            body.style.display = 'none';
-            icon.className = 'fas fa-chevron-down';
-        }
+        const isCollapsed = body.classList.toggle('collapsed');
+        body.style.display = isCollapsed ? 'none' : 'block';
+        icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+    }
+
+    // 切换Bot列表展开/折叠
+    toggleBotList() {
+        const toggleBtn = document.getElementById('bot-list-toggle');
+        const botListSection = document.getElementById('bot-list-section');
+
+        if (!toggleBtn || !botListSection) return;
+
+        const isCollapsing = !botListSection.classList.contains('collapsed');
+        botListSection.classList.toggle('collapsed');
+        toggleBtn.classList.toggle('collapsed', isCollapsing);
+        toggleBtn.title = isCollapsing ? '展开Bot列表' : '折叠Bot列表';
+    }
+
+    // 查看记忆（占位符）
+    viewMemory(sessionId) {
+        alert('查看记忆功能开发中...\n会话ID: ' + sessionId);
+    }
+
+    // 用户画像（占位符）
+    viewUserProfile(sessionId) {
+        alert('用户画像功能开发中...\n会话ID: ' + sessionId);
     }
 
     // 展开所有会话
@@ -594,7 +820,6 @@ class MemOSWebUI {
     // 标记有未保存的更改
     markUnsaved() {
         this.unsavedChanges = true;
-        document.getElementById('save-btn').textContent = '保存*';
     }
 
     // 保存所有配置
@@ -615,7 +840,8 @@ class MemOSWebUI {
 
         // 保存Bot配置
         try {
-            await this.saveBotConfig(this.currentBotId, botConfig);
+            // 调用新的saveBotConfig方法
+            await this.saveBotConfig();
 
             // 收集所有会话配置
             const sessionConfigs = {};
@@ -644,7 +870,6 @@ class MemOSWebUI {
             }
 
             this.unsavedChanges = false;
-            document.getElementById('save-btn').textContent = '保存';
             this.showSaveStatus('配置保存成功', 'success');
 
         } catch (error) {
@@ -654,14 +879,43 @@ class MemOSWebUI {
     }
 
     // 保存Bot配置
-    async saveBotConfig(botId, config) {
-        const response = await this.apiRequest(`/api/config/${botId}`, {
-            method: 'POST',
-            body: JSON.stringify({ config })
-        });
+    async saveBotConfig() {
+        if (!this.currentBotId) {
+            throw new Error('未选择Bot');
+        }
 
-        if (!response.success) {
-            throw new Error(response.message);
+        const botConfig = {
+            custom_user_id: document.getElementById('bot-custom-user-id').value.trim(),
+            memory_injection_enabled: document.getElementById('bot-memory-injection').checked,
+            new_session_upload_enabled: document.getElementById('bot-new-session-upload').checked
+        };
+
+        // 验证用户ID格式
+        if (botConfig.custom_user_id && !this.validateUserId(botConfig.custom_user_id)) {
+            throw new Error('用户ID格式无效，不能包含特殊字符');
+        }
+
+        try {
+            const response = await this.apiRequest(`/api/config/${this.currentBotId}`, {
+                method: 'POST',
+                body: JSON.stringify({ config: botConfig })
+            });
+
+            if (response.success) {
+                this.botConfigs[this.currentBotId] = botConfig;
+                this.unsavedChanges = false;
+
+                // 更新所有会话输入框的placeholder
+                this.updateSessionPlaceholders();
+
+                // 不显示成功消息，由调用者决定
+                return true;
+            } else {
+                throw new Error(response.message);
+            }
+        } catch (error) {
+            console.error('保存Bot配置失败:', error);
+            throw error; // 重新抛出错误，由调用者处理
         }
     }
 
@@ -689,6 +943,10 @@ class MemOSWebUI {
             });
 
             if (response.success) {
+                // 更新缓存
+                this.sessionConfigs[`${botId}_${sessionId}`] = config;
+                // 重置未保存标志
+                this.unsavedChanges = false;
                 this.showSaveStatus('会话配置保存成功', 'success');
             } else {
                 throw new Error(response.message);
@@ -704,19 +962,73 @@ class MemOSWebUI {
         const sessions = {};
         sessions[botId] = sessionConfigs;
 
-        const response = await this.apiRequest('/api/config/bulk', {
-            method: 'POST',
-            body: JSON.stringify({ sessions })
-        });
+        try {
+            const response = await this.apiRequest('/api/config/bulk', {
+                method: 'POST',
+                body: JSON.stringify({ sessions })
+            });
 
-        if (!response.success) {
-            throw new Error(response.message);
+            if (!response.success) {
+                throw new Error(response.message || '保存失败');
+            }
+        } catch (error) {
+            console.error('批量保存会话配置失败:', error);
+            throw error;
+        }
+    }
+
+    // 保存所有会话配置
+    async saveAllSessionConfigs() {
+        if (!this.currentBotId) return;
+
+        try {
+            // 收集所有会话配置
+            const sessionConfigs = {};
+            const sessionElements = document.querySelectorAll('.session-config-panel');
+
+            for (const element of sessionElements) {
+                const sessionId = element.getAttribute('data-session-id');
+                const sessionConfig = {
+                    custom_user_id: element.querySelector('.session-custom-user-id').value.trim(),
+                    memory_injection_enabled: element.querySelector('.session-memory-injection').checked,
+                    new_session_upload_enabled: element.querySelector('.session-new-session-upload').checked
+                };
+
+                // 验证会话用户ID
+                if (sessionConfig.custom_user_id && !this.validateUserId(sessionConfig.custom_user_id)) {
+                    this.showSaveStatus(`会话 ${sessionId} 的用户ID格式无效`, 'error');
+                    return;
+                }
+
+                sessionConfigs[sessionId] = sessionConfig;
+            }
+
+            // 批量保存会话配置
+            if (Object.keys(sessionConfigs).length > 0) {
+                await this.saveBulkSessionConfigs(this.currentBotId, sessionConfigs);
+            }
+
+            this.unsavedChanges = false;
+            this.showSaveStatus('所有会话配置已保存', 'success');
+
+        } catch (error) {
+            console.error('保存会话配置失败:', error);
+            // 处理不同类型的错误
+            let errorMessage = '保存失败';
+            if (error.message) {
+                errorMessage += `: ${error.message}`;
+            } else if (error.response) {
+                errorMessage += `: ${JSON.stringify(error.response)}`;
+            } else {
+                errorMessage += `: ${JSON.stringify(error)}`;
+            }
+            this.showSaveStatus(errorMessage, 'error');
         }
     }
 
     // 删除会话配置
     async deleteSessionConfig(botId, sessionId) {
-        if (!confirm(`确定要删除会话 ${sessionId} 的配置吗？`)) {
+        if (!confirm(`确定要删除会话 ${sessionId} 的配置吗？配置将从配置文件中永久删除。`)) {
             return;
         }
 
@@ -726,9 +1038,19 @@ class MemOSWebUI {
             });
 
             if (response.success) {
+                // 从DOM中移除会话配置面板
+                const sessionElement = document.querySelector(`[data-session-id="${sessionId}"]`);
+                if (sessionElement) {
+                    sessionElement.remove();
+                }
+
+                // 从缓存中删除配置
+                delete this.sessionConfigs[`${botId}_${sessionId}`];
+
+                // 更新会话计数
+                this.updateSessionCount();
+
                 this.showSaveStatus('会话配置已删除', 'success');
-                // 重新加载会话列表
-                await this.loadSessions(botId);
             } else {
                 throw new Error(response.message);
             }
@@ -738,9 +1060,118 @@ class MemOSWebUI {
         }
     }
 
+    // 应用记忆注入开关到所有会话
+    async applyMemoryInjectionToAll() {
+        if (!this.currentBotId) return;
+        if (this.applyingToAllInProgress) return;
+
+        const enabled = document.getElementById('bot-memory-injection').checked;
+
+        // 弹出确认对话框
+        if (!confirm(`确定要将记忆注入开关${enabled ? '开启' : '关闭'}应用到所有会话吗？Bot配置将先保存，然后应用到所有会话。`)) {
+            return;
+        }
+
+        this.applyingToAllInProgress = true;
+        this.showSaveStatus('正在保存Bot配置...', 'info');
+
+        try {
+            // 先保存Bot配置
+            await this.saveBotConfig();
+
+            this.showSaveStatus('Bot配置已保存，正在应用到所有会话...', 'info');
+
+            // 调用新API端点应用到所有会话
+            const response = await this.apiRequest(`/api/config/${this.currentBotId}/apply-switch-to-all`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    switch_type: "memory_injection",
+                    enabled: enabled
+                })
+            });
+
+            if (response.success) {
+                // 更新UI中所有会话的开关状态
+                const sessionElements = document.querySelectorAll('.session-config-panel');
+                sessionElements.forEach(element => {
+                    const checkbox = element.querySelector('.session-memory-injection');
+                    if (checkbox) {
+                        checkbox.checked = enabled;
+                    }
+                });
+
+                this.showSaveStatus(`Bot配置已保存，${response.message}`, 'success');
+            } else {
+                this.showSaveStatus(response.message, 'error');
+            }
+        } catch (error) {
+            console.error('应用到所有会话失败:', error);
+            // 如果错误发生在保存Bot配置阶段，显示相应的错误消息
+            this.showSaveStatus(`Bot配置保存失败: ${error.message}`, 'error');
+        } finally {
+            this.applyingToAllInProgress = false;
+        }
+    }
+
+    // 应用新会话上传开关到所有会话
+    async applyNewSessionUploadToAll() {
+        if (!this.currentBotId) return;
+        if (this.applyingToAllInProgress) return;
+
+        const enabled = document.getElementById('bot-new-session-upload').checked;
+
+        // 弹出确认对话框
+        if (!confirm(`确定要将新会话上传开关${enabled ? '开启' : '关闭'}应用到所有会话吗？Bot配置将先保存，然后应用到所有会话。`)) {
+            return;
+        }
+
+        this.applyingToAllInProgress = true;
+        this.showSaveStatus('正在保存Bot配置...', 'info');
+
+        try {
+            // 先保存Bot配置
+            await this.saveBotConfig();
+
+            this.showSaveStatus('Bot配置已保存，正在应用到所有会话...', 'info');
+
+            // 调用新API端点应用到所有会话
+            const response = await this.apiRequest(`/api/config/${this.currentBotId}/apply-switch-to-all`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    switch_type: "new_session_upload",
+                    enabled: enabled
+                })
+            });
+
+            if (response.success) {
+                // 更新UI中所有会话的开关状态
+                const sessionElements = document.querySelectorAll('.session-config-panel');
+                sessionElements.forEach(element => {
+                    const checkbox = element.querySelector('.session-new-session-upload');
+                    if (checkbox) {
+                        checkbox.checked = enabled;
+                    }
+                });
+
+                this.showSaveStatus(`Bot配置已保存，${response.message}`, 'success');
+            } else {
+                this.showSaveStatus(response.message, 'error');
+            }
+        } catch (error) {
+            console.error('应用到所有会话失败:', error);
+            // 如果错误发生在保存Bot配置阶段，显示相应的错误消息
+            this.showSaveStatus(`Bot配置保存失败: ${error.message}`, 'error');
+        } finally {
+            this.applyingToAllInProgress = false;
+        }
+    }
+
     // 重置配置
     resetConfigs() {
-        if (!this.currentBotId || !confirm('确定要重置所有更改吗？未保存的更改将丢失。')) {
+        if (!this.currentBotId) return;
+        
+        // 直接弹出确认对话框
+        if (!confirm('确定要重置所有更改吗？未保存的更改将丢失。')) {
             return;
         }
 
@@ -761,8 +1192,26 @@ class MemOSWebUI {
         });
 
         this.unsavedChanges = false;
-        document.getElementById('save-btn').textContent = '保存';
         this.showSaveStatus('配置已重置', 'info');
+    }
+
+    // 更新所有会话输入框的placeholder
+    updateSessionPlaceholders() {
+        if (!this.currentBotId) return;
+
+        const botConfig = this.botConfigs[this.currentBotId];
+        if (!botConfig) return;
+
+        const sessionElements = document.querySelectorAll('.session-config-panel');
+        sessionElements.forEach(element => {
+            const sessionId = element.getAttribute('data-session-id');
+            const input = element.querySelector('.session-custom-user-id');
+            if (input) {
+                // 计算placeholder：如果Bot有自定义user_id则使用，否则使用默认格式
+                const placeholder = botConfig.custom_user_id ? botConfig.custom_user_id : `${this.currentBotName}:${sessionId}`;
+                input.placeholder = placeholder;
+            }
+        });
     }
 
     // 显示保存状态
@@ -818,11 +1267,44 @@ class MemOSWebUI {
         return !dangerousChars.some(char => userId.includes(char));
     }
 
+    // 更新会话计数显示
+    updateSessionCount() {
+        const sessionsCountElement = document.getElementById('sessions-count');
+        if (!sessionsCountElement) return;
+
+        const sessionElements = document.querySelectorAll('.session-config-panel');
+        const count = sessionElements.length;
+        sessionsCountElement.textContent = `${count}个会话`;
+    }
+
     // HTML转义
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    // 基于内容宽度更新布局
+    updateLayoutBasedOnContentWidth() {
+        const contentArea = document.querySelector('.content-area');
+        if (!contentArea) return;
+
+        const contentWidth = contentArea.offsetWidth;
+        // 如果内容区域不可见，跳过更新
+        if (contentWidth === 0) return;
+
+        const configContainer = document.querySelector('.config-container');
+        if (!configContainer) return;
+
+        // 移除现有的布局类
+        configContainer.classList.remove('layout-wide', 'layout-medium', 'layout-narrow');
+
+        // 根据内容宽度应用布局类
+        if (contentWidth >= 1025) {
+            configContainer.classList.add('layout-wide');
+        } else {
+            configContainer.classList.add('layout-medium');
+        }
     }
 }
 

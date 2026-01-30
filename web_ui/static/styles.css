@@ -88,9 +88,11 @@ html, body {
     background-color: var(--header-bg);
     border-bottom: 1px solid var(--border-color);
     box-shadow: var(--shadow);
-    position: sticky;
+    position: fixed;
     top: 0;
-    z-index: 100;
+    left: 0;
+    right: 0;
+    z-index: 1000;
 }
 
 .header-left {
@@ -118,6 +120,29 @@ html, body {
     background-color: var(--hover-bg);
     padding: 0.25rem 0.5rem;
     border-radius: var(--border-radius);
+}
+
+/* 移动端标题优化 */
+@media (max-width: 768px) {
+    .app-title span {
+        display: none;
+    }
+    
+    .app-title::after {
+        content: "MemOS";
+    }
+    
+    .app-version {
+        display: none;
+    }
+    
+    .btn span {
+        display: none;
+    }
+    
+    .btn {
+        padding: 0.5rem;
+    }
 }
 
 .header-right {
@@ -209,6 +234,7 @@ html, body {
     flex: 1;
     display: flex;
     overflow: hidden;
+    padding-top: 64px;
 }
 
 /* 登录界面样式 */
@@ -269,6 +295,132 @@ html, body {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+/* 桌面端横向布局 */
+.desktop-horizontal-row {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.desktop-horizontal-item {
+    flex: 1;
+    min-width: 250px;
+}
+
+.desktop-horizontal-item:first-child {
+    flex: 2;
+    min-width: 300px;
+}
+
+.desktop-horizontal-item:not(:first-child) {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* 响应式适配 - 基于内容宽度的布局类 */
+/* 宽屏布局：完全横排，不换行（内容宽度 ≥ 1025px） */
+.layout-wide .desktop-horizontal-row {
+    flex-wrap: nowrap;
+}
+
+/* 中屏布局：文本框在上，两个开关在下并排（内容宽度 ≤ 1024px） */
+.layout-medium .desktop-horizontal-row {
+    flex-wrap: wrap;
+    gap: 1.5rem;
+}
+
+.layout-medium .desktop-horizontal-item:first-child {
+    flex: 0 0 100%;
+    min-width: auto;
+    margin-bottom: 0.5rem;
+}
+
+.layout-medium .desktop-horizontal-item:not(:first-child) {
+    flex: 0 0 calc(50% - 0.75rem);
+    min-width: auto;
+}
+
+/* 响应式适配 */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 250px;
+    }
+
+    .content-area {
+        margin-left: 250px;
+    }
+
+    .main-container.sidebar-collapsed .content-area {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        width: 280px;
+        transform: translateX(-100%);
+        z-index: 1000;
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .sidebar.expanded {
+        transform: translateX(0);
+        box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    .content-area {
+        margin-left: 0;
+        width: 100%;
+        max-width: 100vw;
+        transition: var(--transition);
+    }
+
+    /* 遮罩层样式 */
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        top: 64px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 999;
+        backdrop-filter: blur(2px);
+    }
+
+    .sidebar-overlay.active {
+        display: block;
+    }
+
+    /* 侧栏展开时，内容区域变暗 */
+    .main-container.sidebar-expanded .content-area {
+        filter: brightness(0.9);
+        pointer-events: none;
+        user-select: none;
+    }
+
+    /* 确保内容区域内部元素撑满 */
+    .config-container {
+        width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .config-panel,
+    .session-config-panel {
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
+    }
+}
+
+@media (min-width: 769px) {
+    .sidebar {
+        transform: translateX(0) !important;
+    }
 }
 
 .form-group input[type="text"],
@@ -345,6 +497,29 @@ html, body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: fixed;
+    height: calc(100vh - 64px);
+    top: 64px;
+    left: 0;
+    transition: var(--transition);
+    z-index: 1000;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    
+    .sidebar.expanded {
+        transform: translateX(0);
+    }
+}
+
+.sidebar.collapsed {
+    width: 0;
+    padding: 0;
+    border: none;
+    overflow: hidden;
 }
 
 .sidebar-header {
@@ -352,12 +527,50 @@ html, body {
     border-bottom: 1px solid var(--border-color);
 }
 
+.sidebar-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .sidebar-header h3 {
     font-size: 1rem;
-    margin-bottom: 1rem;
+    margin-bottom: 0;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+#bot-list-toggle {
+    transform: rotate(0deg);
+    transition: transform 0.3s ease;
+}
+
+#bot-list-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+.sidebar-toggle-btn {
+    opacity: 0.7;
+}
+
+.sidebar-toggle-btn:hover {
+    opacity: 1;
+}
+
+
+/* 主内容区适配 */
+.main-container.sidebar-collapsed .content-area {
+    margin-left: 0;
+}
+
+.content-area {
+    flex: 1;
+    margin-left: 280px;
+    transition: var(--transition);
+    transition-property: margin-left, filter;
+    transition-duration: 0.3s;
+    transition-timing-function: ease;
 }
 
 .search-box {
@@ -387,6 +600,31 @@ html, body {
     flex: 1;
     overflow-y: auto;
     padding: 1rem;
+    transition: all 0.3s ease;
+}
+
+.sidebar-content.collapsed {
+    display: none;
+}
+
+.sidebar-footer {
+    border-top: 1px solid var(--border-color);
+    padding: 1rem;
+}
+
+.memos-key-management .sidebar-title {
+    margin-bottom: 0.5rem;
+}
+
+.memos-key-management .sidebar-title h3 {
+    font-size: 0.9rem;
+    margin-bottom: 0;
+}
+
+.memos-key-content {
+    padding: 0.5rem;
+    background-color: var(--hover-bg);
+    border-radius: var(--border-radius);
 }
 
 .bot-list {
@@ -553,8 +791,9 @@ html, body {
 .toggle-switch {
     position: relative;
     display: inline-block;
-    width: 50px;
+    width: 60px;
     height: 24px;
+    vertical-align: middle;
 }
 
 .toggle-switch input {
@@ -572,16 +811,17 @@ html, body {
     bottom: 0;
     background-color: var(--border-color);
     transition: var(--transition);
-    border-radius: 34px;
+    border-radius: 24px;
 }
 
 .toggle-label:before {
     position: absolute;
     content: "";
-    height: 16px;
-    width: 16px;
-    left: 4px;
-    bottom: 4px;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
     background-color: white;
     transition: var(--transition);
     border-radius: 50%;
@@ -591,8 +831,12 @@ input:checked + .toggle-label {
     background-color: var(--primary-color);
 }
 
+input:focus + .toggle-label {
+    box-shadow: 0 0 1px var(--primary-color);
+}
+
 input:checked + .toggle-label:before {
-    transform: translateX(26px);
+    transform: translate(39px, -50%);
 }
 
 /* 会话列表样式 */
@@ -623,6 +867,31 @@ input:checked + .toggle-label:before {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+.session-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.session-actions .btn-small {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    min-width: auto;
+}
+
+.session-actions .btn-small i {
+    font-size: 0.7rem;
+}
+
+.session-actions .btn-user-profile {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+}
+
+.session-actions .btn-user-profile i {
+    font-size: 0.9rem;
 }
 
 .session-body {
@@ -685,6 +954,12 @@ input:checked + .toggle-label:before {
     background-color: var(--footer-bg);
     color: var(--text-secondary);
     font-size: 0.875rem;
+    margin-left: 280px;
+    transition: var(--transition);
+}
+
+.app-footer.sidebar-collapsed-footer {
+    margin-left: 0;
 }
 
 .footer-content {
@@ -696,50 +971,75 @@ input:checked + .toggle-label:before {
 .connection-status {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.25rem;
+    color: var(--primary-color);
+    opacity: 0.6;
 }
 
-.status-connected {
-    color: var(--success-color);
+.connection-status i {
+    animation: twinkle 2s ease-in-out infinite;
 }
 
-.status-disconnected {
-    color: var(--danger-color);
+.connection-status i:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.connection-status i:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+@keyframes twinkle {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
     .app-header {
-        flex-direction: column;
-        gap: 1rem;
         padding: 1rem;
-    }
-
-    .header-left, .header-right {
-        width: 100%;
-        justify-content: center;
     }
 
     .main-container {
         flex-direction: column;
+        width: 100%;
+        overflow-x: hidden;
     }
 
     .sidebar {
-        width: 100%;
-        height: 300px;
+        width: 280px;
+        height: calc(100vh - 64px);
         border-right: none;
         border-bottom: 1px solid var(--border-color);
     }
 
+    .content-area {
+        width: 100%;
+        max-width: 100vw;
+        margin-left: 0 !important;
+        padding: 0;
+    }
+
     .toolbar {
-        flex-direction: column;
+        flex-direction: row;
+        flex-wrap: wrap;
         gap: 1rem;
-        align-items: flex-start;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 1rem;
+    }
+
+    .toolbar-left {
+        flex: 1;
+        min-width: 0; /* 允许内容收缩 */
     }
 
     .toolbar-right {
-        width: 100%;
+        width: auto;
         justify-content: flex-end;
+        flex-wrap: nowrap;
+        flex-shrink: 0;
     }
 
     .panel-header {
@@ -752,24 +1052,53 @@ input:checked + .toggle-label:before {
         width: 100%;
         justify-content: space-between;
     }
+
+    .config-container {
+        width: 100%;
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+
+    .config-panel {
+        width: 100%;
+        max-width: 100%;
+        margin: 0 0 1.5rem 0;
+        box-sizing: border-box;
+    }
+
+    .app-footer {
+        margin-left: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
 }
 
 @media (max-width: 480px) {
     .login-card {
         margin: 1rem;
+        width: calc(100% - 2rem);
     }
 
     .config-panel {
-        margin: 1rem;
+        margin: 0 0 1rem 0;
+        width: 100%;
     }
 
     .panel-body {
         padding: 1rem;
     }
 
+    .config-container {
+        padding: 0.5rem;
+    }
+
     .btn {
         padding: 0.5rem 0.75rem;
         font-size: 0.75rem;
+    }
+
+    .toolbar {
+        padding: 0.75rem;
     }
 }
 

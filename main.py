@@ -16,6 +16,8 @@ from astrbot.api.provider import ProviderRequest, LLMResponse
 from astrbot.api import AstrBotConfig, logger
 from .memory_manager import MemoryManager
 from .commands_handler import CommandsHandler, parse_feedback_command
+from .web_ui.config_manager import ConfigManager
+from .web_ui.data_models import BotConfig
 
 # 主插件类
 @register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.6.0")
@@ -86,6 +88,9 @@ class MemosIntegratorPlugin(Star):
             "lan_access": self.config.get("web_lan_access", False),
             "password": self.config.get("web_password", "")
         }
+
+        # 配置管理器初始化
+        self.config_manager = ConfigManager(self._data_dir, self)
 
         # 如果密码为空，生成随机8位密码
         if not self.web_config["password"]:
@@ -210,6 +215,14 @@ class MemosIntegratorPlugin(Star):
     async def initialize(self):
         """插件初始化，启动Web服务器"""
         await super().initialize()
+
+        # 初始化配置文件：同步数据库中的bot和会话
+        try:
+            await self.config_manager.async_sync_with_database()
+            logger.info("配置文件数据库同步完成")
+        except Exception as e:
+            logger.error(f"配置文件数据库同步失败: {e}")
+
         # 检查web_config属性是否存在
         if not hasattr(self, 'web_config'):
             logger.warning("web_config属性未初始化，跳过Web服务器启动")
@@ -313,22 +326,67 @@ class MemosIntegratorPlugin(Star):
             logger.debug(f"使用现有对话ID: {conversation_id}")
 
         return conversation_id
-        
+
+    def _parse_unified_msg_origin(self, unified_msg_origin: str):
+        """
+        解析unified_msg_origin格式为(bot_id, session_id)
+        格式: "platform_name:message_type:session_id"
+        Web界面使用session_id格式为"message_type:session_id"
+        """
+        parts = unified_msg_origin.split(':')
+        if len(parts) >= 3:
+            # platform_name作为bot_id
+            bot_id = parts[0]
+            # 剩余部分作为Web界面的session_id
+            session_id = ':'.join(parts[1:])
+            return bot_id, session_id
+        else:
+            # 如果不是标准格式，使用整个作为session_id，bot_id为空
+            logger.warning(f"unified_msg_origin格式异常: {unified_msg_origin}")
+            return '', unified_msg_origin
+
     @filter.on_llm_request(priority=-1000)
     async def inject_memories(self, event: AstrMessageEvent, req: ProviderRequest):
         """在LLM请求前获取记忆并注入"""
         if self.memory_manager is None:
             return
 
-        session_id = self._get_session_id(event)
+        # 获取完整的unified_msg_origin
+        unified_msg_origin = self._get_session_id(event)
+        # 解析为bot_id和session_id（Web界面格式）
+        bot_id, session_id_web = self._parse_unified_msg_origin(unified_msg_origin)
+
+        # 获取配置，如果配置文件访问失败则使用默认配置
+        try:
+            # 确保会话配置存在（如果不存在则从bot配置复制创建）
+            self.config_manager.ensure_session_config(bot_id, session_id_web, unified_msg_origin)
+            # 获取生效配置
+            effective_config = self.config_manager.get_effective_config(bot_id, session_id_web)
+        except Exception as e:
+            logger.warning(f"配置文件访问失败，使用默认配置: {e}")
+            # 使用默认配置
+            effective_config = BotConfig(
+                custom_user_id="",
+                memory_injection_enabled=True,
+                new_session_upload_enabled=True
+            )
+
+        # 检查记忆注入开关
+        if not effective_config.memory_injection_enabled:
+            logger.debug(f"记忆注入已禁用，bot_id={bot_id}, session_id={session_id_web}")
+            return
+
         conversation_id = await self._get_conversation_id(event)
         user_message = req.prompt
-        
+
         # 无论哪种注入方式，都保存原始prompt以便后续记忆保存
-        self.original_prompts[session_id] = user_message
+        self.original_prompts[unified_msg_origin] = user_message
+
+        # 确定user_id：使用自定义ID或默认的unified_msg_origin
+        user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
 
         memories = await self.memory_manager.retrieve_relevant_memories(
-            user_message, session_id, conversation_id, limit=self.memory_limit
+            user_message, user_id, conversation_id, limit=self.memory_limit
         )
 
         if memories:
@@ -366,11 +424,11 @@ class MemosIntegratorPlugin(Star):
                 })
                 
                 # 保持prompt为原始用户消息
-                logger.info(f"已为会话 {session_id} 以system类型注入 {len(memories)} 条记忆")
+                logger.info(f"已为会话 {user_id} 以system类型注入 {len(memories)} 条记忆")
             else:
                 # 使用user注入：更新prompt为包含记忆的版本
                 req.prompt = memory_prompt
-                logger.info(f"已为会话 {session_id} 以user类型注入 {len(memories)} 条记忆")
+                logger.info(f"已为会话 {user_id} 以user类型注入 {len(memories)} 条记忆")
             
     @filter.on_llm_response()
     async def save_memories(self, event: AstrMessageEvent, resp: LLMResponse):
@@ -380,8 +438,36 @@ class MemosIntegratorPlugin(Star):
             if self.memory_manager is None:
                 return
 
-            session_id = self._get_session_id(event)
+            # 获取完整的unified_msg_origin
+            unified_msg_origin = self._get_session_id(event)
+            # 解析为bot_id和session_id（Web界面格式）
+            bot_id, session_id_web = self._parse_unified_msg_origin(unified_msg_origin)
+
+            # 获取配置，如果配置文件访问失败则使用默认配置
+            try:
+                # 确保会话配置存在（如果不存在则从bot配置复制创建）
+                self.config_manager.ensure_session_config(bot_id, session_id_web, unified_msg_origin)
+                # 获取生效配置
+                effective_config = self.config_manager.get_effective_config(bot_id, session_id_web)
+            except Exception as e:
+                logger.warning(f"配置文件访问失败，使用默认配置: {e}")
+                # 使用默认配置
+                effective_config = BotConfig(
+                    custom_user_id="",
+                    memory_injection_enabled=True,
+                    new_session_upload_enabled=True
+                )
+
+            # 检查新会话上传开关
+            if not effective_config.new_session_upload_enabled:
+                logger.debug(f"新会话上传已禁用，bot_id={bot_id}, session_id={session_id_web}")
+                return
+
             conversation_id = await self._get_conversation_id(event)
+            # 为了向后兼容，保留session_id变量作为unified_msg_origin
+            session_id = unified_msg_origin
+            # 确定user_id：使用自定义ID或默认的unified_msg_origin
+            user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
 
             # 处理不同注入类型的后续操作
             user_message = None
@@ -418,8 +504,26 @@ class MemosIntegratorPlugin(Star):
             if self.upload_interval == 1:
                 logger.debug(f"会话 {conversation_id} upload_interval为1，直接上传")
                 messages_to_upload = [{"role": "user", "content": user_message}, {"role": "assistant", "content": ai_response}]
-                
+
                 logger.info(f"会话 {conversation_id} 直接上传1轮对话...")
+
+                # 直接上传任务
+                async def _save_memory_task_direct(msgs, user_id, conv_id):
+                    try:
+                        result = await self.memory_manager.add_message(
+                            messages=msgs,
+                            user_id=user_id,
+                            conversation_id=conv_id
+                        )
+                        if result.get("success"):
+                            logger.info(f"成功直接保存1轮对话到MemOS，user_id: {user_id}")
+                        else:
+                            logger.warning(f"直接保存到MemOS失败: {result.get('error')}")
+                    except Exception as e:
+                        logger.error(f"直接保存记忆时出错: {e}")
+
+                task = asyncio.create_task(_save_memory_task_direct(messages_to_upload, user_id, conversation_id))
+                task.add_done_callback(lambda t: t.exception() and logger.error(f"直接保存任务异常: {t.exception()}", exc_info=True))
             else:
                 # 将当前轮次的对话保存到数据库
                 self._save_message_to_db(conversation_id, "user", user_message)
@@ -446,24 +550,24 @@ class MemosIntegratorPlugin(Star):
                     # 未达到上传阈值，不执行上传
                     return
 
-                async def _save_memory_task(msgs, sess_id, conv_id):
+                async def _save_memory_task(msgs, user_id, conv_id):
                     """后台批量保存任务"""
                     try:
                         # 直接调用 add_message，它支持 messages 列表参数
                         result = await self.memory_manager.add_message(
                             messages=msgs,
-                            user_id=sess_id,
+                            user_id=user_id,
                             conversation_id=conv_id
                         )
                         if result.get("success"):
-                            logger.info(f"成功批量保存 {len(msgs)//2} 轮对话到MemOS，会话ID: {sess_id}")
+                            logger.info(f"成功批量保存 {len(msgs)//2} 轮对话到MemOS，user_id: {user_id}")
                         else:
                             logger.warning(f"批量保存到MemOS失败: {result.get('error')}")
                     except Exception as e:
                         logger.error(f"批量保存记忆时出错: {e}")
 
                 # 提交后台任务
-                task = asyncio.create_task(_save_memory_task(messages_to_upload, session_id, conversation_id))
+                task = asyncio.create_task(_save_memory_task(messages_to_upload, user_id, conversation_id))
                 
                 def task_done_callback(t: asyncio.Task):
                     try:
@@ -507,14 +611,36 @@ class MemosIntegratorPlugin(Star):
             yield event.plain_result("MemOS记忆管理器未初始化，请检查配置")
             return
 
-        session_id = self._get_session_id(event)
+        # 获取完整的unified_msg_origin
+        unified_msg_origin = self._get_session_id(event)
+        # 解析为bot_id和session_id（Web界面格式）
+        bot_id, session_id_web = self._parse_unified_msg_origin(unified_msg_origin)
+
+        # 获取配置，如果配置文件访问失败则使用默认配置
+        try:
+            # 确保会话配置存在（如果不存在则从bot配置复制创建）
+            self.config_manager.ensure_session_config(bot_id, session_id_web, unified_msg_origin)
+            # 获取生效配置
+            effective_config = self.config_manager.get_effective_config(bot_id, session_id_web)
+        except Exception as e:
+            logger.warning(f"配置文件访问失败，使用默认配置: {e}")
+            # 使用默认配置
+            effective_config = BotConfig(
+                custom_user_id="",
+                memory_injection_enabled=True,
+                new_session_upload_enabled=True
+            )
+
+        # 确定user_id：使用自定义ID或默认的unified_msg_origin
+        user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
+
         conversation_id = await self._get_conversation_id(event) if not user_profile else None
-        
+
         try:
             # 准备请求数据
             request_data = {
                 "query": query_text,
-                "user_id": session_id
+                "user_id": user_id
             }
             
             # 只有在需要时才添加conversation_id

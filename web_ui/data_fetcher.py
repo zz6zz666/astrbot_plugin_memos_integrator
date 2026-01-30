@@ -11,24 +11,51 @@ from .data_models import BotInfo, SessionInfo, BotTreeItem
 class DataFetcher:
     """数据获取器"""
 
-    def __init__(self, plugin_instance):
+    def __init__(self, plugin_instance, config_manager=None):
         """
         初始化DataFetcher
 
         Args:
             plugin_instance: 插件实例
+            config_manager: 配置管理器实例（可选）
         """
         self.plugin = plugin_instance
+        self.config_manager = config_manager
 
     async def get_bots(self) -> List[BotInfo]:
         """
         获取Bot列表
 
-        从AstrBot的platform_manager获取所有启用的平台适配器
+        优先从配置文件读取，如果config_manager不存在则从数据库获取
 
         Returns:
             Bot信息列表
         """
+        # 如果config_manager存在，从配置文件读取
+        if self.config_manager:
+            try:
+                # 同步数据库（检查新增bot）
+                await self.config_manager.async_sync_with_database()
+
+                bots = []
+                config_data = self.config_manager.config_data
+                for bot_id, bot_data in config_data.get("bots", {}).items():
+                    # 从配置数据提取name和type，兼容旧配置
+                    name = bot_data.get("name", bot_id)
+                    bot_type = bot_data.get("type", "unknown")
+                    enabled = True  # 默认启用
+                    bots.append(BotInfo(
+                        id=bot_id,
+                        name=name,
+                        type=bot_type,
+                        enabled=enabled
+                    ))
+                return bots
+            except Exception as e:
+                logger.error(f"从配置文件获取Bot列表失败，回退到数据库: {e}")
+                # 回退到数据库查询
+
+        # 回退到原始数据库查询
         bots = []
 
         try:
@@ -82,7 +109,7 @@ class DataFetcher:
         """
         获取指定Bot的会话列表
 
-        从AstrBot的conversation_manager获取会话数据
+        优先从配置文件读取，如果config_manager不存在则从数据库获取
 
         Args:
             bot_id: Bot ID
@@ -90,6 +117,31 @@ class DataFetcher:
         Returns:
             会话信息列表
         """
+        # 如果config_manager存在，从配置文件读取
+        if self.config_manager:
+            try:
+                # 同步数据库（检查新增bot和会话）
+                await self.config_manager.async_sync_with_database()
+
+                sessions = []
+                config_data = self.config_manager.config_data
+                bot_data = config_data.get("bots", {}).get(bot_id)
+                if bot_data:
+                    conversations = bot_data.get("conversations", {})
+                    for session_id, session_data in conversations.items():
+                        unified_msg_origin = session_data.get("unified_msg_origin", "")
+                        # conversation_count设为None，因为配置文件不存储对话数量
+                        sessions.append(SessionInfo(
+                            id=session_id,
+                            unified_msg_origin=unified_msg_origin,
+                            conversation_count=None
+                        ))
+                return sessions
+            except Exception as e:
+                logger.error(f"从配置文件获取会话列表失败，回退到数据库: {e}")
+                # 回退到数据库查询
+
+        # 回退到原始数据库查询
         sessions = []
 
         try:

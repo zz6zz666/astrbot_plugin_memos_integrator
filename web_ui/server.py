@@ -16,7 +16,8 @@ from . import auth
 from .data_models import (
     LoginRequest, LoginResponse, BotInfo, SessionInfo,
     BotTreeItem, ConfigTreeResponse, SaveConfigRequest,
-    SaveConfigResponse, HealthResponse, BotConfig
+    SaveConfigResponse, HealthResponse, BotConfig,
+    ApplySwitchRequest, ApplySwitchResponse
 )
 from .config_manager import ConfigManager
 from .data_fetcher import DataFetcher
@@ -59,8 +60,8 @@ def create_app(plugin_instance):
     app.add_middleware(GZipMiddleware, minimum_size=1000)
 
     # 初始化管理器
-    config_manager = ConfigManager(plugin_instance._data_dir)
-    data_fetcher = DataFetcher(plugin_instance)
+    config_manager = ConfigManager(plugin_instance._data_dir, plugin_instance)
+    data_fetcher = DataFetcher(plugin_instance, config_manager)
 
     # 存储插件实例供依赖使用
     app.state.plugin_instance = plugin_instance
@@ -180,6 +181,45 @@ def create_app(plugin_instance):
         """获取生效配置（考虑优先级）"""
         return config_manager.get_effective_config(bot_id, session_id)
 
+
+    @app.post("/api/config/{bot_id}/apply-switch-to-all", response_model=ApplySwitchResponse)
+    async def apply_switch_to_all(
+        bot_id: str,
+        request_data: ApplySwitchRequest,
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """将开关状态应用到所有会话"""
+        try:
+            result = config_manager.apply_switch_to_all_sessions(
+                bot_id, request_data.switch_type, request_data.enabled
+            )
+
+            success = result["updated"] == result["total"]
+            if success:
+                message = f"成功更新 {result['updated']}/{result['total']} 个会话"
+            else:
+                # 只显示前5个失败的会话ID，避免消息过长
+                failed_preview = ", ".join(result["failed"][:5])
+                if len(result["failed"]) > 5:
+                    failed_preview += f" 等{len(result['failed'])}个"
+                message = f"部分更新成功：{result['updated']}/{result['total']} 个会话，失败：{failed_preview}"
+
+            return ApplySwitchResponse(
+                success=success,
+                total_sessions=result["total"],
+                updated_sessions=result["updated"],
+                failed_sessions=result["failed"],
+                message=message
+            )
+        except Exception as e:
+            return ApplySwitchResponse(
+                success=False,
+                total_sessions=0,
+                updated_sessions=0,
+                failed_sessions=[],
+                message=f"应用开关失败: {str(e)}"
+            )
+
     @app.post("/api/config/{bot_id}", response_model=SaveConfigResponse)
     async def save_bot_config(
         bot_id: str,
@@ -256,6 +296,7 @@ def create_app(plugin_instance):
                 success=False,
                 message=f"批量保存失败: {str(e)}"
             )
+
 
     @app.post("/api/logout")
     async def logout(
