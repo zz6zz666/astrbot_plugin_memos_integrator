@@ -43,5 +43,29 @@
     "options": ["user", "system"],
     "hint": "user: 将记忆临时注入到用户prompt中; system: 将记忆作为system消息添加到上下文中",
     "default": "user"
+  },
+  "web_enabled": {
+    "type": "bool",
+    "description": "Web管理界面启用开关",
+    "hint": "控制是否开启Web管理界面，用于配置MemOS规则",
+    "default": false
+  },
+  "web_port": {
+    "type": "int",
+    "description": "Web访问端口",
+    "hint": "自定义web界面的访问端口，默认8000",
+    "default": 8000
+  },
+  "web_lan_access": {
+    "type": "bool",
+    "description": "局域网访问开关",
+    "hint": "控制是否允许局域网内其他设备访问，仅开启时支持跨设备访问",
+    "default": false
+  },
+  "web_password": {
+    "type": "string",
+    "description": "Web访问密码",
+    "hint": "登录web界面的验证密码，默认随机生成8位字符串",
+    "default": ""
   }
 }

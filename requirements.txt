@@ -1,3 +1,11 @@
 # MemOS记忆集成插件依赖
 # 使用HTTP API方式,无需安装MemoryOS SDK
 aiohttp>=3.8.0
+
+# Web管理界面依赖
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+PyJWT[crypto]>=2.8.0  # 使用PyJWT替代python-jose，避免Python2/3兼容性问题
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+pydantic>=2.0.0

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemOS Web管理界面</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 顶部导航栏 -->
+        <header class="app-header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <i class="fas fa-brain"></i>
+                    MemOS Web管理界面
+                </h1>
+                <div class="app-version">v1.0.0</div>
+            </div>
+            <div class="header-right">
+                <button id="theme-toggle" class="btn-icon" title="切换主题">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button id="logout-btn" class="btn btn-secondary" style="display: none;">
+                    <i class="fas fa-sign-out-alt"></i> 退出
+                </button>
+            </div>
+        </header>
+
+        <!-- 主要内容区域 -->
+        <main class="app-main">
+            <!-- 登录界面 -->
+            <div id="login-screen" class="login-container">
+                <div class="login-card">
+                    <div class="login-header">
+                        <i class="fas fa-lock login-icon"></i>
+                        <h2>Web管理界面登录</h2>
+                        <p>请输入访问密码以继续</p>
+                    </div>
+                    <div class="login-body">
+                        <div class="form-group">
+                            <label for="password">
+                                <i class="fas fa-key"></i> 访问密码
+                            </label>
+                            <div class="password-input">
+                                <input type="password" id="password" placeholder="请输入Web访问密码">
+                                <button type="button" id="toggle-password" class="btn-icon">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="form-hint">
+                                <i class="fas fa-info-circle"></i>
+                                密码在插件配置中设置，默认随机生成8位字符串
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button id="login-btn" class="btn btn-primary btn-block">
+                                <i class="fas fa-sign-in-alt"></i> 登录
+                            </button>
+                        </div>
+                        <div id="login-error" class="error-message" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主界面 -->
+            <div id="main-screen" class="main-container" style="display: none;">
+                <!-- 侧边栏 -->
+                <aside class="sidebar">
+                    <div class="sidebar-header">
+                        <h3><i class="fas fa-robot"></i> Bot列表</h3>
+                        <div class="search-box">
+                            <input type="text" id="bot-search" placeholder="搜索Bot...">
+                            <i class="fas fa-search"></i>
+                        </div>
+                    </div>
+                    <div class="sidebar-content">
+                        <div id="bot-list" class="bot-list">
+                            <!-- Bot列表将通过JavaScript动态加载 -->
+                            <div class="loading-state">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>加载Bot列表中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- 主内容区 -->
+                <div class="content-area">
+                    <!-- 操作工具栏 -->
+                    <div class="toolbar">
+                        <div class="toolbar-left">
+                            <h2 id="current-bot-title">选择Bot以查看配置</h2>
+                            <div id="bot-info" class="bot-info" style="display: none;">
+                                <span class="bot-tag" id="bot-type-tag"></span>
+                                <span class="status-badge" id="bot-status-badge"></span>
+                            </div>
+                        </div>
+                        <div class="toolbar-right">
+                            <button id="save-btn" class="btn btn-primary" disabled>
+                                <i class="fas fa-save"></i> 保存
+                            </button>
+                            <button id="reset-btn" class="btn btn-secondary" disabled>
+                                <i class="fas fa-undo"></i> 重置
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 配置区域 -->
+                    <div class="config-container">
+                        <!-- Bot配置面板 -->
+                        <div class="config-panel" id="bot-config-panel" style="display: none;">
+                            <div class="panel-header">
+                                <h3><i class="fas fa-cog"></i> Bot全局配置</h3>
+                                <p class="panel-subtitle">这些配置将应用于该Bot的所有会话，除非会话有特殊配置</p>
+                            </div>
+                            <div class="panel-body">
+                                <div class="config-form">
+                                    <div class="form-group">
+                                        <label for="bot-custom-user-id">
+                                            <i class="fas fa-id-card"></i> MemOS user_id
+                                        </label>
+                                        <input type="text" id="bot-custom-user-id"
+                                               placeholder="留空则使用默认生成规则 (bot名称:会话类型:会话ID)">
+                                        <div class="form-hint">
+                                            替代默认的用户ID生成方式，用于MemOS API请求
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>
+                                            <i class="fas fa-memory"></i> 记忆注入开关
+                                        </label>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="bot-memory-injection" checked>
+                                            <label for="bot-memory-injection" class="toggle-label">
+                                                <span class="toggle-handle"></span>
+                                            </label>
+                                        </div>
+                                        <div class="form-hint">
+                                            控制该Bot是否启用MemOS记忆注入
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>
+                                            <i class="fas fa-upload"></i> 新会话上传开关
+                                        </label>
+                                        <div class="toggle-switch">
+                                            <input type="checkbox" id="bot-new-session-upload" checked>
+                                            <label for="bot-new-session-upload" class="toggle-label">
+                                                <span class="toggle-handle"></span>
+                                            </label>
+                                        </div>
+                                        <div class="form-hint">
+                                            控制该Bot是否启用新会话数据上传至MemOS
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 会话列表面板 -->
+                        <div class="config-panel" id="sessions-panel" style="display: none;">
+                            <div class="panel-header">
+                                <div class="panel-header-left">
+                                    <h3><i class="fas fa-comments"></i> 会话列表</h3>
+                                    <p class="panel-subtitle" id="sessions-count">加载中...</p>
+                                </div>
+                                <div class="panel-header-right">
+                                    <div class="search-box">
+                                        <input type="text" id="session-search" placeholder="搜索会话...">
+                                        <i class="fas fa-search"></i>
+                                    </div>
+                                    <button id="expand-all-btn" class="btn btn-small">
+                                        <i class="fas fa-expand-alt"></i> 全部展开
+                                    </button>
+                                    <button id="collapse-all-btn" class="btn btn-small">
+                                        <i class="fas fa-compress-alt"></i> 全部折叠
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <div id="sessions-list" class="sessions-list">
+                                    <!-- 会话列表将通过JavaScript动态加载 -->
+                                    <div class="loading-state">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <p>加载会话列表中...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 会话配置面板模板 (隐藏) -->
+                        <div class="session-config-template" style="display: none;">
+                            <div class="session-config-panel">
+                                <div class="session-header">
+                                    <h4 class="session-title">
+                                        <i class="fas fa-comment-dots"></i>
+                                        <span class="session-id"></span>
+                                    </h4>
+                                    <div class="session-actions">
+                                        <button class="btn btn-small btn-toggle-session" data-action="toggle">
+                                            <i class="fas fa-chevron-down"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="session-body" style="display: none;">
+                                    <div class="config-form">
+                                        <div class="form-group">
+                                            <label for="session-custom-user-id-{id}">
+                                                <i class="fas fa-id-card"></i> MemOS user_id
+                                            </label>
+                                            <input type="text" class="session-custom-user-id"
+                                                   data-session-id="{id}"
+                                                   placeholder="留空则继承Bot配置或使用默认规则">
+                                            <div class="form-hint">
+                                                优先级：会话配置 > Bot配置
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>
+                                                <i class="fas fa-memory"></i> 记忆注入开关
+                                            </label>
+                                            <div class="toggle-switch">
+                                                <input type="checkbox" class="session-memory-injection"
+                                                       data-session-id="{id}" checked>
+                                                <label class="toggle-label">
+                                                    <span class="toggle-handle"></span>
+                                                </label>
+                                            </div>
+                                            <div class="form-hint">
+                                                可覆盖Bot配置，控制该会话是否启用记忆注入
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>
+                                                <i class="fas fa-upload"></i> 新会话上传开关
+                                            </label>
+                                            <div class="toggle-switch">
+                                                <input type="checkbox" class="session-new-session-upload"
+                                                       data-session-id="{id}" checked>
+                                                <label class="toggle-label">
+                                                    <span class="toggle-handle"></span>
+                                                </label>
+                                            </div>
+                                            <div class="form-hint">
+                                                可覆盖Bot配置，控制该会话是否启用新会话上传
+                                            </div>
+                                        </div>
+
+                                        <div class="form-actions">
+                                            <button class="btn btn-small btn-save-session" data-session-id="{id}">
+                                                <i class="fas fa-save"></i> 保存此会话
+                                            </button>
+                                            <button class="btn btn-small btn-delete-session" data-session-id="{id}">
+                                                <i class="fas fa-trash"></i> 删除配置
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 保存状态指示器 -->
+            <div id="save-status" class="save-status" style="display: none;">
+                <div class="save-status-content">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span id="save-status-text">正在保存配置...</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- 页脚 -->
+        <footer class="app-footer">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p>MemOS记忆集成插件 &copy; 2024</p>
+                </div>
+                <div class="footer-right">
+                    <div class="connection-status">
+                        <i class="fas fa-circle status-connected" style="display: none;"></i>
+                        <i class="fas fa-circle status-disconnected"></i>
+                        <span id="connection-text">未连接</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- JavaScript文件 -->
+    <script src="/static/app.js"></script>
+</body>
+</html>

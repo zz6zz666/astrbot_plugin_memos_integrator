@@ -5,7 +5,9 @@ MemOS记忆集成插件
 
 import asyncio
 import sqlite3
-from typing import Dict, List
+import random
+import string
+from typing import Dict, List, Optional
 from pathlib import Path
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.platform import MessageType
@@ -74,6 +76,21 @@ class MemosIntegratorPlugin(Star):
         except Exception as e:
             logger.error(f"初始化MemOS记忆管理器失败: {e}")
             self.memory_manager = None
+
+        # Web服务器相关属性初始化
+        self.web_server = None
+        self.web_server_task = None
+        self.web_config = {
+            "enabled": self.config.get("web_enabled", False),
+            "port": self.config.get("web_port", 8000),
+            "lan_access": self.config.get("web_lan_access", False),
+            "password": self.config.get("web_password", "")
+        }
+
+        # 如果密码为空，生成随机8位密码
+        if not self.web_config["password"]:
+            self.web_config["password"] = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            logger.info(f"Web访问密码已自动生成: {self.web_config['password']}")
             
     def _resolve_data_dir(self) -> Path:
         """优先使用 StarTools 数据目录，失败时退回到 AstrBot/data/plugin_data 下。"""
@@ -91,7 +108,129 @@ class MemosIntegratorPlugin(Star):
                 logger.warning(f"[MemOS记忆集成插件] 创建数据目录失败({exc})，退回 fallback：{fallback_dir}")
         fallback_dir.mkdir(parents=True, exist_ok=True)
         return fallback_dir
-    
+
+    async def start_web_server(self):
+        """启动FastAPI Web服务器"""
+        # 检查web_config属性是否存在
+        if not hasattr(self, 'web_config'):
+            logger.warning("web_config属性未初始化，无法启动Web服务器")
+            return
+        if not self.web_config["enabled"]:
+            logger.info("Web管理界面已禁用，跳过启动")
+            return
+
+        try:
+            # 动态导入以避免循环依赖
+            import uvicorn
+            from .web_ui.server import create_app
+
+            # 创建FastAPI应用
+            app = create_app(self)
+
+            # 配置服务器参数
+            host = "0.0.0.0" if self.web_config["lan_access"] else "127.0.0.1"
+            port = self.web_config["port"]
+
+            # 创建uvicorn配置
+            config = uvicorn.Config(
+                app=app,
+                host=host,
+                port=port,
+                log_level="info",
+                access_log=True
+            )
+
+            # 创建服务器实例
+            self.web_server = uvicorn.Server(config)
+
+            # 在后台任务中启动服务器
+            self.web_server_task = asyncio.create_task(self.web_server.serve())
+
+            logger.info(f"Web管理界面已启动: http://{host}:{port}")
+            logger.info(f"Web访问密码: {self.web_config['password']}")
+            if self.web_config["lan_access"]:
+                logger.info("局域网访问已启用，其他设备可访问")
+            else:
+                logger.info("仅限本机访问，如需跨设备访问请启用局域网访问开关")
+
+        except ImportError as e:
+            logger.error(f"启动Web服务器失败，缺少依赖: {e}")
+            logger.error("请安装FastAPI、uvicorn、PyJWT和passlib: pip install fastapi uvicorn PyJWT[crypto] passlib[bcrypt]")
+        except OSError as e:
+            if "Address already in use" in str(e):
+                logger.error(f"端口 {self.web_config['port']} 已被占用，无法启动Web服务器")
+                # 尝试备用端口
+                try:
+                    port = self.web_config["port"] + 1
+                    config = uvicorn.Config(
+                        app=app,
+                        host=host,
+                        port=port,
+                        log_level="info",
+                        access_log=True
+                    )
+                    self.web_server = uvicorn.Server(config)
+                    self.web_server_task = asyncio.create_task(self.web_server.serve())
+                    logger.info(f"使用备用端口启动Web管理界面: http://{host}:{port}")
+                except Exception as fallback_error:
+                    logger.error(f"备用端口也失败: {fallback_error}")
+            else:
+                logger.error(f"启动Web服务器失败: {e}")
+        except Exception as e:
+            logger.error(f"启动Web服务器失败: {e}")
+
+    async def stop_web_server(self):
+        """停止Web服务器"""
+        # 检查web_server属性是否存在
+        if not hasattr(self, 'web_server') or not self.web_server:
+            return
+        try:
+            # 优雅关闭服务器
+            self.web_server.should_exit = True
+            if self.web_server_task:
+                # 等待服务器停止
+                await asyncio.wait_for(self.web_server_task, timeout=5.0)
+            # 清理资源
+            self.web_server = None
+            self.web_server_task = None
+            logger.info("Web管理界面已停止")
+        except asyncio.TimeoutError:
+            logger.warning("Web服务器停止超时，强制终止")
+            if self.web_server_task:
+                self.web_server_task.cancel()
+                try:
+                    await self.web_server_task
+                except asyncio.CancelledError:
+                    pass
+            self.web_server = None
+            self.web_server_task = None
+        except Exception as e:
+            logger.error(f"停止Web服务器失败: {e}")
+
+    async def initialize(self):
+        """插件初始化，启动Web服务器"""
+        await super().initialize()
+        # 检查web_config属性是否存在
+        if not hasattr(self, 'web_config'):
+            logger.warning("web_config属性未初始化，跳过Web服务器启动")
+            return
+        if self.web_config["enabled"]:
+            # 延迟启动，确保其他组件已初始化
+            await asyncio.sleep(1)
+            await self.start_web_server()
+
+    async def terminate(self):
+        """插件终止，停止Web服务器"""
+        await self.stop_web_server()
+        # 关闭数据库连接
+        if hasattr(self, '_db_conn') and self._db_conn:
+            self._db_conn.close()
+            logger.info("数据库连接已关闭")
+        # 清理记忆管理器
+        if hasattr(self, 'memory_manager'):
+            self.memory_manager = None
+        await super().terminate()
+
     def _init_db(self):
         """初始化数据库表结构"""
         cursor = self._db_conn.cursor()
