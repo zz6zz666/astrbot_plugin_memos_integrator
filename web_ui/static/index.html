@@ -147,13 +147,15 @@
                                             <label for="bot-api-key-selection">
                                                 <i class="fas fa-key"></i> MemOS API密钥
                                             </label>
-                                            <div class="key-selection-container">
-                                                <div class="key-select-row">
-                                                    <select id="bot-api-key-selection" class="key-select">
-                                                        <option value="default">default</option>
-                                                        <!-- 密钥选项将通过JavaScript动态加载 -->
-                                                    </select>
+                                            <div class="custom-dropdown" id="bot-api-key-dropdown">
+                                                <div class="custom-dropdown-trigger">
+                                                    <span class="custom-dropdown-selected">default</span>
+                                                    <i class="fas fa-chevron-down"></i>
                                                 </div>
+                                                <div class="custom-dropdown-menu">
+                                                    <!-- 密钥选项将通过JavaScript动态加载 -->
+                                                </div>
+                                                <input type="hidden" id="bot-api-key-selection" value="default">
                                             </div>
                                             <div class="form-hint">
                                                 选择用于此Bot的MemOS API密钥
@@ -256,62 +258,68 @@
                                 </div>
                                 <div class="session-body" style="display: none;">
                                     <div class="config-form">
-                                        <div class="form-group">
-                                            <label for="session-custom-user-id-{id}">
-                                                <i class="fas fa-id-card"></i> MemOS user_id
-                                            </label>
-                                            <input type="text" class="session-custom-user-id"
-                                                   data-session-id="{id}"
-                                                   placeholder="留空则继承Bot配置或使用默认规则">
-                                            <div class="form-hint">
-                                                优先级：会话配置 > Bot配置
-                                            </div>
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label for="session-api-key-selection-{id}">
-                                                <i class="fas fa-key"></i> MemOS API密钥
-                                            </label>
-                                            <div class="key-selection-container">
-                                                <select class="session-api-key-selection" data-session-id="{id}">
-                                                    <option value="default">默认密钥</option>
-                                                    <!-- 密钥选项将通过JavaScript动态加载 -->
-                                                </select>
-                                            </div>
-                                            <div class="form-hint">
-                                                优先级：会话配置 > Bot配置
-                                            </div>
-                                        </div>
-
-                                        <div class="form-group">
-                                            <label>
-                                                <i class="fas fa-memory"></i> 记忆注入开关
-                                            </label>
-                                            <div class="toggle-switch">
-                                                <input type="checkbox" class="session-memory-injection"
-                                                       data-session-id="{id}" checked>
-                                                <label class="toggle-label">
-                                                    <span class="toggle-handle"></span>
+                                        <div class="desktop-horizontal-row">
+                                            <div class="form-group desktop-horizontal-item">
+                                                <label for="session-custom-user-id-{id}">
+                                                    <i class="fas fa-id-card"></i> MemOS user_id
                                                 </label>
+                                                <input type="text" class="session-custom-user-id"
+                                                       data-session-id="{id}"
+                                                       placeholder="留空则继承Bot配置或使用默认规则">
+                                                <div class="form-hint">
+                                                    优先级：会话配置 > Bot配置
+                                                </div>
                                             </div>
-                                            <div class="form-hint">
-                                                可覆盖Bot配置，控制该会话是否启用记忆注入
-                                            </div>
-                                        </div>
 
-                                        <div class="form-group">
-                                            <label>
-                                                <i class="fas fa-upload"></i> 新会话上传开关
-                                            </label>
-                                            <div class="toggle-switch">
-                                                <input type="checkbox" class="session-new-session-upload"
-                                                       data-session-id="{id}" checked>
-                                                <label class="toggle-label">
-                                                    <span class="toggle-handle"></span>
+                                            <div class="form-group desktop-horizontal-item">
+                                                <label for="session-api-key-selection-{id}">
+                                                    <i class="fas fa-key"></i> MemOS API密钥
                                                 </label>
+                                                <div class="custom-dropdown session-api-key-dropdown" data-session-id="{id}">
+                                                    <div class="custom-dropdown-trigger">
+                                                        <span class="custom-dropdown-selected">default</span>
+                                                        <i class="fas fa-chevron-down"></i>
+                                                    </div>
+                                                    <div class="custom-dropdown-menu">
+                                                        <!-- 密钥选项将通过JavaScript动态加载 -->
+                                                    </div>
+                                                    <input type="hidden" class="session-api-key-selection" data-session-id="{id}" value="default">
+                                                </div>
+                                                <div class="form-hint">
+                                                    优先级：会话配置 > Bot配置
+                                                </div>
                                             </div>
-                                            <div class="form-hint">
-                                                可覆盖Bot配置，控制该会话是否启用新会话上传
+
+                                            <div class="form-group desktop-horizontal-item">
+                                                <label>
+                                                    <i class="fas fa-memory"></i> 记忆注入开关
+                                                </label>
+                                                <div class="toggle-switch">
+                                                    <input type="checkbox" class="session-memory-injection"
+                                                           data-session-id="{id}" checked>
+                                                    <label class="toggle-label">
+                                                        <span class="toggle-handle"></span>
+                                                    </label>
+                                                </div>
+                                                <div class="form-hint">
+                                                    可覆盖Bot配置，控制该会话是否启用记忆注入
+                                                </div>
+                                            </div>
+
+                                            <div class="form-group desktop-horizontal-item">
+                                                <label>
+                                                    <i class="fas fa-upload"></i> 新会话上传开关
+                                                </label>
+                                                <div class="toggle-switch">
+                                                    <input type="checkbox" class="session-new-session-upload"
+                                                           data-session-id="{id}" checked>
+                                                    <label class="toggle-label">
+                                                        <span class="toggle-handle"></span>
+                                                    </label>
+                                                </div>
+                                                <div class="form-hint">
+                                                    可覆盖Bot配置，控制该会话是否启用新会话上传
+                                                </div>
                                             </div>
                                         </div>
 
@@ -416,6 +424,43 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary btn-cancel-edit">取消</button>
                 <button class="btn btn-primary btn-save-edit">保存更改</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用确认对话框 -->
+    <div class="modal-overlay" id="confirm-dialog-overlay" style="display: none;">
+        <div class="modal-dialog confirm-dialog">
+            <div class="modal-header">
+                <h3 id="confirm-dialog-title"><i class="fas fa-question-circle"></i> 确认</h3>
+                <button class="btn-icon btn-close-modal" id="confirm-dialog-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="confirm-dialog-message" class="confirm-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="confirm-dialog-cancel">取消</button>
+                <button class="btn btn-primary" id="confirm-dialog-ok">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示对话框（alert） -->
+    <div class="modal-overlay" id="alert-dialog-overlay" style="display: none;">
+        <div class="modal-dialog alert-dialog">
+            <div class="modal-header">
+                <h3 id="alert-dialog-title"><i class="fas fa-info-circle"></i> 提示</h3>
+                <button class="btn-icon btn-close-modal" id="alert-dialog-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="alert-dialog-message" class="confirm-message"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="alert-dialog-ok">确定</button>
             </div>
         </div>
     </div>

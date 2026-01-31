@@ -327,55 +327,38 @@ html, body {
 }
 
 /* 响应式适配 - 基于内容宽度的布局类 */
-/* 宽屏布局：完全横排，不换行（内容宽度 ≥ 1025px） */
+
+/* ==================== 宽屏布局（内容宽度 ≥ 1025px） ==================== */
+/* 一行四列，完全横排 */
 .layout-wide .desktop-horizontal-row {
-    flex-wrap: nowrap;
-}
-
-/* 中屏布局：文本框在上，两个开关在下并排（内容宽度 ≤ 1024px） */
-.layout-medium .desktop-horizontal-row {
-    flex-wrap: wrap;
-    gap: 1.5rem;
-}
-
-.layout-medium .desktop-horizontal-item:first-child {
-    flex: 0 0 100%;
-    min-width: auto;
-    margin-bottom: 0.5rem;
-}
-
-.layout-medium .desktop-horizontal-item:not(:first-child) {
-    flex: 0 0 calc(50% - 0.75rem);
-    min-width: auto;
-}
-
-/* 宽屏布局：按钮在选择框下方 */
-.layout-wide .key-select-row {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 2rem;
 }
 
-.layout-wide .key-select-row .key-select {
-    width: 100%;
+.layout-wide .desktop-horizontal-item {
+    flex: 1;
+    min-width: 0;
+}
+
+/* 第一个元素（user_id）占更多空间 */
+.layout-wide .desktop-horizontal-item:first-child {
+    flex: 2;
+}
+
+/* API密钥下拉框最大宽度 */
+.layout-wide .desktop-horizontal-item:nth-child(2) .custom-dropdown {
     max-width: 300px;
 }
 
-/* 宽屏布局：选择框和按钮固定宽度 */
-.layout-wide .desktop-horizontal-item:nth-child(2) .key-select {
-    max-width: 300px;
-    width: 100%;
+/* 按钮在下方 */
+.layout-wide .desktop-horizontal-item .apply-to-all-btn {
+    margin-top: 8px;
 }
 
-.layout-wide .desktop-horizontal-item:nth-child(2) .apply-to-all-btn {
-    width: auto;
-}
-    margin-left: 0;
-}
-
-
-/* 中屏布局：文本框和选择框在第一行，两个开关在第二行 */
+/* ==================== 中屏布局（768px ≤ 内容宽度 ≤ 1024px） ==================== */
+/* 第一行：user_id 和 API密钥 并排 */
+/* 第二行：两个开关并排 */
 .layout-medium .desktop-horizontal-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -383,71 +366,57 @@ html, body {
     gap: 1.5rem;
 }
 
+/* 第一行第一列：user_id */
 .layout-medium .desktop-horizontal-item:first-child {
     grid-column: 1;
     grid-row: 1;
+    min-width: 0;
 }
 
+/* 第一行第二列：API密钥 */
 .layout-medium .desktop-horizontal-item:nth-child(2) {
     grid-column: 2;
     grid-row: 1;
+    min-width: 0;
 }
 
+/* 第二行第一列：记忆注入开关 */
 .layout-medium .desktop-horizontal-item:nth-child(3) {
     grid-column: 1;
     grid-row: 2;
+    min-width: 0;
 }
 
+/* 第二行第二列：新会话上传开关 */
 .layout-medium .desktop-horizontal-item:nth-child(4) {
     grid-column: 2;
     grid-row: 2;
+    min-width: 0;
 }
 
-/* 中屏布局：按钮在选择框下方 */
-.layout-medium .key-select-row {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: stretch;
+/* 中屏布局：按钮在下方 */
+.layout-medium .desktop-horizontal-item .apply-to-all-btn {
+    margin-top: 8px;
 }
 
-.layout-medium .key-select-row .key-select {
-    width: 100%;
-    max-width: 300px;
-}
-
-/* 中屏布局：选择框和按钮固定宽度 */
-.layout-medium .desktop-horizontal-item:nth-child(2) .key-select {
-    max-width: 300px;
-    width: 100%;
-}
-
-.layout-medium .desktop-horizontal-item:nth-child(2) .apply-to-all-btn {
-    width: auto;
-}
-    margin-left: 0;
-}
-
-
-/* 窄屏布局 */
+/* ==================== 窄屏布局（内容宽度 < 768px） ==================== */
+/* 第一行：user_id 独占 */
+/* 第二行：API密钥（下拉框和按钮并排） */
+/* 第三行：两个开关并排 */
 .layout-narrow .desktop-horizontal-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
     grid-template-rows: auto auto auto;
-    gap: 1.5rem;
+    gap: 1rem;
 }
 
-.layout-narrow .desktop-horizontal-item {
-    width: 100%;
-}
-
-/* 第一行：文本框独占一行 */
+/* 第一行：user_id 独占一行 */
 .layout-narrow .desktop-horizontal-item:first-child {
     grid-column: 1 / span 2;
     grid-row: 1;
 }
 
-/* 第二行：选择框和按钮在同一行 */
+/* 第二行：API密钥（使用grid布局让下拉框和按钮并排） */
 .layout-narrow .desktop-horizontal-item:nth-child(2) {
     grid-column: 1 / span 2;
     grid-row: 2;
@@ -458,55 +427,53 @@ html, body {
     align-items: center;
 }
 
-/* 窄屏布局：label在第一行 */
-.layout-narrow .desktop-horizontal-item:nth-child(2) label {
+/* 窄屏布局：API密钥的label在第一行 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) > label {
     grid-column: 1 / span 2;
     grid-row: 1;
     margin-bottom: 0;
 }
 
-/* 窄屏布局：选择框在第二行第一列 */
-.layout-narrow .desktop-horizontal-item:nth-child(2) .key-selection-container {
+/* 窄屏布局：API密钥的下拉框在第二行左侧 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) .custom-dropdown {
     grid-column: 1;
     grid-row: 2;
-    margin-bottom: 0;
+    max-width: none;
+    width: 100%;
 }
 
-/* 窄屏布局：按钮在第二行第二列 */
+/* 窄屏布局：API密钥的按钮在第二行右侧 */
 .layout-narrow .desktop-horizontal-item:nth-child(2) .apply-to-all-btn {
     grid-column: 2;
     grid-row: 2;
     margin-top: 0;
     align-self: center;
+    white-space: nowrap;
 }
 
-/* 窄屏布局：提示文字在第三行 */
-.layout-narrow .desktop-horizontal-item:nth-child(2) .form-hint {
+/* 窄屏布局：API密钥的提示文字在第三行 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) > .form-hint {
     grid-column: 1 / span 2;
     grid-row: 3;
     margin-top: 0;
 }
 
-/* 窄屏布局：选择框宽度自适应 */
-.layout-narrow .desktop-horizontal-item:nth-child(2) .key-select {
-    max-width: none;
-    width: 100%;
-}
-
-/* 窄屏布局：始终显示按钮文字和图标 */
-.layout-narrow #apply-api-key-to-all {
-    font-size: 0.75rem;
-}
-
-/* 第三行：两个开关并排 */
+/* 第三行：记忆注入开关 */
 .layout-narrow .desktop-horizontal-item:nth-child(3) {
     grid-column: 1;
     grid-row: 3;
 }
 
+/* 第三行：新会话上传开关 */
 .layout-narrow .desktop-horizontal-item:nth-child(4) {
     grid-column: 2;
     grid-row: 3;
+}
+
+/* 窄屏布局：开关的按钮隐藏（会话配置中没有应用到全部按钮） */
+.layout-narrow .desktop-horizontal-item:nth-child(3) .apply-to-all-btn,
+.layout-narrow .desktop-horizontal-item:nth-child(4) .apply-to-all-btn {
+    display: none;
 }
 
 /* 响应式适配 */
@@ -632,6 +599,18 @@ html, body {
     align-items: flex-start;
     gap: 0.25rem;
     line-height: 1.4;
+    min-height: 1.05rem;
+}
+
+/* 仅API密钥的form-hint需要额外上边距以与开关对齐 */
+.desktop-horizontal-row .desktop-horizontal-item:nth-child(2) .form-hint {
+    margin-top: 0.5rem;
+}
+
+/* 开关下方的form-hint保持默认间隔 */
+.desktop-horizontal-row .desktop-horizontal-item:nth-child(3) .form-hint,
+.desktop-horizontal-row .desktop-horizontal-item:nth-child(4) .form-hint {
+    margin-top: 0.25rem;
 }
 
 .form-actions {
@@ -969,12 +948,12 @@ html, body {
     padding: 1.5rem;
 }
 
-/* 开关样式 */
+/* 开关样式 - 美化版 */
 .toggle-switch {
     position: relative;
     display: inline-block;
-    width: 60px;
-    height: 24px;
+    width: 52px;
+    height: 32px;
     vertical-align: middle;
 }
 
@@ -993,32 +972,60 @@ html, body {
     bottom: 0;
     background-color: var(--border-color);
     transition: var(--transition);
-    border-radius: 24px;
+    border-radius: 32px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12);
 }
 
 .toggle-label:before {
     position: absolute;
     content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
+    height: 24px;
+    width: 24px;
+    left: 4px;
     top: 50%;
     transform: translateY(-50%);
     background-color: white;
-    transition: var(--transition);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
     border-radius: 50%;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 input:checked + .toggle-label {
-    background-color: var(--primary-color);
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
 }
 
 input:focus + .toggle-label {
-    box-shadow: 0 0 1px var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 input:checked + .toggle-label:before {
-    transform: translate(39px, -50%);
+    transform: translateY(-50%) translateX(20px);
+}
+
+/* 开关悬停效果 */
+.toggle-switch:hover .toggle-label {
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-switch:hover .toggle-label:before {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+input:checked + .toggle-label:hover {
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* 开关悬停效果 */
+.toggle-switch:hover .toggle-label {
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.toggle-switch:hover .toggle-label:before {
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+input:checked + .toggle-label:hover {
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2), 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
 
 /* 会话列表样式 */
@@ -1581,6 +1588,35 @@ input:checked + .toggle-label:before {
     gap: 0.5rem;
 }
 
+/* 确认对话框样式 */
+.confirm-dialog .modal-body,
+.alert-dialog .modal-body {
+    padding: 1.5rem;
+}
+
+.confirm-message {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--text-color);
+    white-space: pre-line;
+}
+
+.confirm-dialog .modal-header h3,
+.alert-dialog .modal-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.confirm-dialog .modal-header h3 i {
+    color: var(--warning-color);
+}
+
+.alert-dialog .modal-header h3 i {
+    color: var(--info-color);
+}
+
 /* Toast通知 */
 .toast-notification {
     position: fixed;
@@ -1693,6 +1729,83 @@ input:checked + .toggle-label:before {
 
 .flex {
     display: flex !important;
+}
+
+/* 自定义下拉框样式 */
+.custom-dropdown {
+    position: relative;
+    width: 100%;
+    max-width: 300px;
+}
+
+.custom-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: var(--transition);
+    user-select: none;
+}
+
+.custom-dropdown-trigger:hover {
+    border-color: var(--primary-color);
+}
+
+.custom-dropdown-trigger.active {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+}
+
+.custom-dropdown-trigger i {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.custom-dropdown-trigger.active i {
+    transform: rotate(180deg);
+}
+
+.custom-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+}
+
+.custom-dropdown-menu.show {
+    display: block;
+}
+
+.custom-dropdown-item {
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: var(--transition);
+    font-size: 0.875rem;
+    color: var(--text-color);
+}
+
+.custom-dropdown-item:hover {
+    background-color: var(--hover-bg);
+}
+
+.custom-dropdown-item.selected {
+    background-color: var(--active-bg);
+    color: var(--primary-color);
 }
 
 /* 滚动条样式 */
