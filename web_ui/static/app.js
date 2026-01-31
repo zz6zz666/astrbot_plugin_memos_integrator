@@ -1749,33 +1749,46 @@ class MemOSWebUI {
     async resetConfigs() {
         if (!this.currentBotId) return;
 
-        // 直接弹出确认对话框
+        // 弹出确认对话框，明确告知用户重置的影响
         const confirmed = await this.showConfirmDialog(
-            '确定要重置所有更改吗？未保存的更改将丢失。',
-            '确认重置配置'
+            '确定要重置该Bot的配置吗？这将：\n1. 清除该Bot下所有会话的自定义配置\n2. 将Bot配置恢复为默认状态（user_id为空，API密钥为default，注入与上传开关均为开启）\n\n此操作不可撤销。',
+            '确认重置Bot配置'
         );
         if (!confirmed) {
             return;
         }
 
-        // 重置Bot配置
-        const botConfig = this.botConfigs[this.currentBotId];
-        if (botConfig) {
-            this.renderBotConfig(this.currentBotId, botConfig);
-        }
+        try {
+            // 调用后端API重置配置
+            const response = await this.apiRequest(`/api/config/${this.currentBotId}/reset`, {
+                method: 'POST'
+            });
 
-        // 重置所有会话配置
-        const sessionElements = document.querySelectorAll('.session-config-panel');
-        sessionElements.forEach(element => {
-            const sessionId = element.getAttribute('data-session-id');
-            const sessionConfig = this.sessionConfigs[`${this.currentBotId}_${sessionId}`];
-            if (sessionConfig) {
-                this.renderSessionConfig(this.currentBotId, sessionId, sessionConfig);
+            if (response.success) {
+                // 重新加载配置数据
+                await this.loadBotConfig(this.currentBotId);
+
+                // 清空本地会话配置缓存
+                const sessionsToRemove = [];
+                for (const key in this.sessionConfigs) {
+                    if (key.startsWith(`${this.currentBotId}_`)) {
+                        sessionsToRemove.push(key);
+                    }
+                }
+                sessionsToRemove.forEach(key => delete this.sessionConfigs[key]);
+
+                // 重新渲染会话列表
+                await this.loadSessions(this.currentBotId);
+
+                this.unsavedChanges = false;
+                this.showSaveStatus(response.message || 'Bot配置已重置为默认状态', 'success');
+            } else {
+                this.showSaveStatus(response.message || '重置失败', 'error');
             }
-        });
-
-        this.unsavedChanges = false;
-        this.showSaveStatus('配置已重置', 'info');
+        } catch (error) {
+            console.error('重置配置失败:', error);
+            this.showSaveStatus(`重置失败: ${error.message}`, 'error');
+        }
     }
 
     // 更新所有会话输入框的placeholder

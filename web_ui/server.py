@@ -418,6 +418,19 @@ def create_app(plugin_instance):
             message="配置保存成功" if success else "配置保存失败，请检查用户ID格式"
         )
 
+    @app.post("/api/config/{bot_id}/reset", response_model=SaveConfigResponse)
+    async def reset_bot_config(
+        bot_id: str,
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """重置Bot配置为默认状态，并清除所有会话配置"""
+        result = config_manager.reset_bot_config(bot_id)
+
+        return SaveConfigResponse(
+            success=result["success"],
+            message=result["message"]
+        )
+
     @app.post("/api/config/{bot_id}/{session_id}", response_model=SaveConfigResponse)
     async def save_session_config(
         bot_id: str,
@@ -446,6 +459,7 @@ def create_app(plugin_instance):
             success=success,
             message="配置删除成功" if success else "配置删除失败"
         )
+
 
     @app.get("/api/memos-config/{bot_id}/{session_id}", response_model=MemosConfigResponse)
     async def get_memos_config(

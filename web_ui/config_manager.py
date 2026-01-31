@@ -292,6 +292,64 @@ class ConfigManager:
             logger.error(f"删除会话配置失败: {e}")
             return False
 
+    def reset_bot_config(self, bot_id: str) -> dict:
+        """
+        重置Bot配置为默认状态，并清除所有会话配置
+
+        Args:
+            bot_id: Bot ID
+
+        Returns:
+            包含重置结果的字典
+        """
+        try:
+            # 重新加载配置确保获取最新数据
+            self._reload_config_if_needed()
+
+            if bot_id not in self.config_data["bots"]:
+                return {
+                    "success": False,
+                    "message": f"Bot {bot_id} 不存在"
+                }
+
+            # 获取当前bot的元数据（name和type）
+            bot_data = self.config_data["bots"][bot_id]
+            bot_name = bot_data.get("name", bot_id)
+            bot_type = bot_data.get("type", "unknown")
+
+            # 获取所有会话ID
+            sessions = bot_data.get("conversations", {})
+            session_count = len(sessions)
+
+            # 重置bot配置为默认值，保留元数据
+            self.config_data["bots"][bot_id] = {
+                "custom_user_id": "",  # user_id为空
+                "memory_injection_enabled": True,  # 记忆注入开关为true
+                "new_session_upload_enabled": True,  # 新会话上传开关为true
+                "api_key_selection": "default",  # API密钥为default
+                "name": bot_name,  # 保留元数据
+                "type": bot_type,  # 保留元数据
+                "conversations": {}  # 清空所有会话配置
+            }
+
+            # 保存到文件
+            self._save_config(self.config_data)
+
+            logger.info(f"Bot {bot_id} 配置已重置，清除了 {session_count} 个会话配置")
+
+            return {
+                "success": True,
+                "message": f"Bot配置已重置，清除了 {session_count} 个会话配置",
+                "cleared_sessions": session_count
+            }
+
+        except Exception as e:
+            logger.error(f"重置Bot配置失败: {e}")
+            return {
+                "success": False,
+                "message": f"重置失败: {str(e)}"
+            }
+
     async def async_sync_with_database(self) -> None:
         """
         异步同步配置文件与数据库状态
