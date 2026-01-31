@@ -30,6 +30,7 @@ class ConfigManager:
         self.config_backup_dir = data_dir / "backups"
         self.config_data = self._load_config()
         self._in_sync = False  # 防止重入标志
+        self._last_modified_time = self.config_file.stat().st_mtime if self.config_file.exists() else 0
 
     def _load_config(self) -> Dict[str, Any]:
         """加载配置文件"""
@@ -70,6 +71,36 @@ class ConfigManager:
             self._save_config(default_config)
             return default_config
 
+    def _reload_config_if_needed(self) -> None:
+        """检查配置文件是否已修改，如果是则重新加载"""
+        try:
+            if not self.config_file.exists():
+                return
+
+            current_mtime = self.config_file.stat().st_mtime
+            if current_mtime > self._last_modified_time:
+                # 文件已修改，重新加载
+                new_config = self._load_config()
+                self.config_data = new_config
+                self._last_modified_time = current_mtime
+                logger.debug("配置文件已重新加载")
+        except Exception as e:
+            logger.error(f"检查配置文件修改时间失败: {e}")
+
+    def force_reload(self) -> None:
+        """强制重新加载配置文件（忽略修改时间检查）"""
+        try:
+            if not self.config_file.exists():
+                return
+            # 直接重新加载配置
+            new_config = self._load_config()
+            self.config_data = new_config
+            if self.config_file.exists():
+                self._last_modified_time = self.config_file.stat().st_mtime
+            logger.debug("配置文件已强制重新加载")
+        except Exception as e:
+            logger.error(f"强制重新加载配置文件失败: {e}")
+
     def _save_config(self, config: Dict[str, Any]) -> None:
         """保存配置文件"""
         # 创建备份
@@ -82,8 +113,14 @@ class ConfigManager:
         with open(self.config_file, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
 
+        # 更新最后修改时间
+        if self.config_file.exists():
+            self._last_modified_time = self.config_file.stat().st_mtime
+
     def get_bot_config(self, bot_id: str) -> BotConfig:
         """获取Bot配置"""
+        # 重新加载配置确保获取最新数据
+        self._reload_config_if_needed()
         bot_data = self.config_data["bots"].get(bot_id, {})
         return BotConfig(
             custom_user_id=bot_data.get("custom_user_id", ""),
@@ -93,6 +130,8 @@ class ConfigManager:
 
     def get_session_config(self, bot_id: str, session_id: str) -> SessionConfig:
         """获取会话配置"""
+        # 重新加载配置确保获取最新数据
+        self._reload_config_if_needed()
         bot_data = self.config_data["bots"].get(bot_id, {})
         sessions = bot_data.get("conversations", {})
         session_data = sessions.get(session_id, {})
@@ -122,7 +161,7 @@ class ConfigManager:
             # 合并配置，会话配置覆盖Bot配置
             effective_config = bot_config.model_copy()
 
-            # 只覆盖非空的会话配置
+            # 会话配置的custom_user_id非空时覆盖Bot配置，否则保留Bot配置的值
             if session_config.custom_user_id:
                 effective_config.custom_user_id = session_config.custom_user_id
 
@@ -137,6 +176,9 @@ class ConfigManager:
     def save_bot_config(self, bot_id: str, config: BotConfig) -> bool:
         """保存Bot配置"""
         try:
+            # 重新加载配置确保获取最新数据
+            self._reload_config_if_needed()
+
             # 验证用户ID格式
             if config.custom_user_id and not self._validate_user_id(config.custom_user_id):
                 return False
@@ -164,6 +206,9 @@ class ConfigManager:
     def save_session_config(self, bot_id: str, session_id: str, config: SessionConfig) -> bool:
         """保存会话配置"""
         try:
+            # 重新加载配置确保获取最新数据
+            self._reload_config_if_needed()
+
             # 验证用户ID格式
             if config.custom_user_id and not self._validate_user_id(config.custom_user_id):
                 return False
@@ -196,6 +241,9 @@ class ConfigManager:
     def delete_session_config(self, bot_id: str, session_id: str) -> bool:
         """删除会话配置"""
         try:
+            # 重新加载配置确保获取最新数据
+            self._reload_config_if_needed()
+
             if (bot_id in self.config_data["bots"] and
                 "conversations" in self.config_data["bots"][bot_id] and
                 session_id in self.config_data["bots"][bot_id]["conversations"]):
@@ -219,7 +267,7 @@ class ConfigManager:
     async def async_sync_with_database(self) -> None:
         """
         异步同步配置文件与数据库状态
-        从数据库获取所有bot和会话，为新增的bot和会话创建默认配置
+        只同步bot列表：添加新增bot，清除不复存在的bot，不处理会话
         """
         if not self.plugin_instance:
             logger.warning("插件实例未设置，无法同步数据库")
@@ -232,6 +280,9 @@ class ConfigManager:
 
         self._in_sync = True
         try:
+            # 重新加载配置确保基于最新数据同步
+            self._reload_config_if_needed()
+
             # 临时创建DataFetcher（不传递config_manager以避免递归）
             from .data_fetcher import DataFetcher
             data_fetcher = DataFetcher(self.plugin_instance)
@@ -261,28 +312,16 @@ class ConfigManager:
                     if "type" not in bot_data:
                         bot_data["type"] = bot.type
 
-            # 为每个bot同步会话
-            for bot in bots:
-                bot_id = bot.id
-                # 获取该bot的所有会话
-                sessions = await data_fetcher.get_sessions(bot_id)
-                bot_data = self.config_data["bots"].get(bot_id)
-                if not bot_data:
-                    continue
-                if "conversations" not in bot_data:
-                    bot_data["conversations"] = {}
+            # 清除不复存在的bot（配置中存在但数据库中不存在）
+            config_bot_ids = set(self.config_data["bots"].keys())
+            db_bot_ids = {bot.id for bot in bots}
+            bots_to_remove = config_bot_ids - db_bot_ids
 
-                for session in sessions:
-                    session_id = session.id
-                    if session_id not in bot_data["conversations"]:
-                        # 添加会话配置（包含元数据）
-                        bot_data["conversations"][session_id] = {
-                            "custom_user_id": "",
-                            "memory_injection_enabled": True,
-                            "new_session_upload_enabled": True,
-                            "unified_msg_origin": session.unified_msg_origin
-                        }
-                        logger.info(f"新增会话配置: {bot.name}/{session_id}")
+            for bot_id in bots_to_remove:
+                if bot_id in self.config_data["bots"]:
+                    bot_name = self.config_data["bots"][bot_id].get("name", bot_id)
+                    del self.config_data["bots"][bot_id]
+                    logger.info(f"移除不复存在的Bot配置: {bot_name} ({bot_id})")
 
             # 保存更新后的配置
             self._save_config(self.config_data)
@@ -324,6 +363,9 @@ class ConfigManager:
         """
         确保会话配置存在，如果不存在则从bot配置复制创建
         """
+        # 重新加载配置确保获取最新数据
+        self._reload_config_if_needed()
+
         if bot_id not in self.config_data["bots"]:
             # Bot不存在，先创建bot配置（使用默认值）
             self.config_data["bots"][bot_id] = {
@@ -344,7 +386,7 @@ class ConfigManager:
             # 从bot配置复制，并添加unified_msg_origin
             bot_config = self.get_bot_config(bot_id)
             bot_data["conversations"][session_id] = {
-                "custom_user_id": "",
+                "custom_user_id": "",  # 会话的custom_user_id在创建时始终保持空
                 "memory_injection_enabled": bot_config.memory_injection_enabled,
                 "new_session_upload_enabled": bot_config.new_session_upload_enabled,
                 "unified_msg_origin": unified_msg_origin
@@ -354,10 +396,14 @@ class ConfigManager:
 
     def get_all_bot_ids(self) -> list[str]:
         """获取所有Bot ID"""
+        # 重新加载配置确保获取最新数据
+        self._reload_config_if_needed()
         return list(self.config_data["bots"].keys())
 
     def get_all_session_ids(self, bot_id: str) -> list[str]:
         """获取指定Bot的所有会话ID"""
+        # 重新加载配置确保获取最新数据
+        self._reload_config_if_needed()
         bot_data = self.config_data["bots"].get(bot_id, {})
         conversations = bot_data.get("conversations", {})
         return list(conversations.keys())
@@ -398,6 +444,8 @@ class ConfigManager:
         Returns:
             包含统计信息的字典: total, updated, failed
         """
+        # 重新加载配置确保获取最新数据
+        self._reload_config_if_needed()
         if bot_id not in self.config_data["bots"]:
             return {"total": 0, "updated": 0, "failed": []}
 

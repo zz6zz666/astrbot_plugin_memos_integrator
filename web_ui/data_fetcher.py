@@ -109,7 +109,7 @@ class DataFetcher:
         """
         获取指定Bot的会话列表
 
-        优先从配置文件读取，如果config_manager不存在则从数据库获取
+        只从配置文件读取，不查询数据库
 
         Args:
             bot_id: Bot ID
@@ -138,11 +138,12 @@ class DataFetcher:
                         ))
                 return sessions
             except Exception as e:
-                logger.error(f"从配置文件获取会话列表失败，回退到数据库: {e}")
-                # 回退到数据库查询
+                logger.error(f"从配置文件获取会话列表失败，返回空列表: {e}")
+                # 返回空列表，不查询数据库
+                return []
 
-        # 回退到原始数据库查询
-        sessions = []
+        # 如果config_manager不存在，返回空列表
+        return []
 
         try:
             # 获取对话管理器实例

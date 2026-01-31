@@ -358,6 +358,8 @@ class MemosIntegratorPlugin(Star):
 
         # 获取配置，如果配置文件访问失败则使用默认配置
         try:
+            # 强制重新加载配置文件以确保获取最新配置
+            self.config_manager.force_reload()
             # 确保会话配置存在（如果不存在则从bot配置复制创建）
             self.config_manager.ensure_session_config(bot_id, session_id_web, unified_msg_origin)
             # 获取生效配置
@@ -382,7 +384,7 @@ class MemosIntegratorPlugin(Star):
         # 无论哪种注入方式，都保存原始prompt以便后续记忆保存
         self.original_prompts[unified_msg_origin] = user_message
 
-        # 确定user_id：使用自定义ID或默认的unified_msg_origin
+        # 确定user_id：会话custom_user_id非空则使用会话的，否则使用Bot的custom_user_id，最后使用默认逻辑
         user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
 
         memories = await self.memory_manager.retrieve_relevant_memories(
@@ -445,6 +447,8 @@ class MemosIntegratorPlugin(Star):
 
             # 获取配置，如果配置文件访问失败则使用默认配置
             try:
+                # 强制重新加载配置文件以确保获取最新配置
+                self.config_manager.force_reload()
                 # 确保会话配置存在（如果不存在则从bot配置复制创建）
                 self.config_manager.ensure_session_config(bot_id, session_id_web, unified_msg_origin)
                 # 获取生效配置
@@ -466,7 +470,7 @@ class MemosIntegratorPlugin(Star):
             conversation_id = await self._get_conversation_id(event)
             # 为了向后兼容，保留session_id变量作为unified_msg_origin
             session_id = unified_msg_origin
-            # 确定user_id：使用自定义ID或默认的unified_msg_origin
+            # 确定user_id：会话custom_user_id非空则使用会话的，否则使用Bot的custom_user_id，最后使用默认逻辑
             user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
 
             # 处理不同注入类型的后续操作
@@ -618,6 +622,8 @@ class MemosIntegratorPlugin(Star):
 
         # 获取配置，如果配置文件访问失败则使用默认配置
         try:
+            # 强制重新加载配置文件以确保获取最新配置
+            self.config_manager.force_reload()
             # 确保会话配置存在（如果不存在则从bot配置复制创建）
             self.config_manager.ensure_session_config(bot_id, session_id_web, unified_msg_origin)
             # 获取生效配置
@@ -631,7 +637,7 @@ class MemosIntegratorPlugin(Star):
                 new_session_upload_enabled=True
             )
 
-        # 确定user_id：使用自定义ID或默认的unified_msg_origin
+        # 确定user_id：会话custom_user_id非空则使用会话的，否则使用Bot的custom_user_id，最后使用默认逻辑
         user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
 
         conversation_id = await self._get_conversation_id(event) if not user_profile else None
