@@ -496,7 +496,6 @@ class ConfigManager:
             result.append(ApiKeyInfo(
                 id=key_id,
                 name=key_data.get("name", "未知密钥"),
-                source=key_data.get("source", "user_defined"),
                 created_at=key_data.get("created_at", ""),
                 is_default=key_data.get("is_default", False),
                 value=value
@@ -547,7 +546,6 @@ class ConfigManager:
         api_keys[key_id] = {
             "name": name,
             "value": encrypted_value,
-            "source": "user_defined",
             "created_at": datetime.now().isoformat(),
             "is_default": False
         }
@@ -671,7 +669,6 @@ class ConfigManager:
         api_keys["default"] = {
             "name": "default",
             "value": self.encrypt_key_value(default_key_value),
-            "source": "plugin_config",
             "created_at": datetime.now().isoformat(),
             "is_default": True
         }

@@ -778,19 +778,35 @@ html, body {
     padding: 1rem;
 }
 
-.memos-key-management .sidebar-title {
-    margin-bottom: 0.5rem;
-}
-
-.memos-key-management .sidebar-title h3 {
-    font-size: 0.9rem;
-    margin-bottom: 0;
-}
-
-.memos-key-content {
-    padding: 0.5rem;
-    background-color: var(--hover-bg);
+.sidebar-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
     border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: var(--transition);
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.sidebar-menu-item:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.sidebar-menu-item.active {
+    background-color: var(--active-bg);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-color);
+}
+
+.sidebar-menu-item i {
+    width: 20px;
+    text-align: center;
+    color: var(--primary-color);
 }
 
 .bot-list {
@@ -1277,76 +1293,198 @@ input:checked + .toggle-label:before {
     border: 1px solid var(--border-color);
 }
 
-/* 密钥列表 */
-.key-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.key-item {
+/* 密钥表格 */
+.key-table-container {
     background-color: var(--card-bg);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    transition: var(--transition);
+    overflow: hidden;
 }
 
-.key-item:hover {
+.key-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.key-table thead {
     background-color: var(--hover-bg);
-    border-color: var(--primary-color);
+    border-bottom: 2px solid var(--border-color);
 }
 
-.key-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.key-item-info {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.key-item-info i {
-    color: var(--primary-color);
-    font-size: 1.25rem;
-}
-
-.key-item-details {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.key-name {
+.key-table th {
+    padding: 1rem;
+    text-align: left;
     font-weight: 600;
+    color: var(--text-color);
     font-size: 0.9rem;
 }
 
-
-.key-time {
-    font-size: 0.7rem;
-    color: var(--text-secondary);
+.key-table td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
 }
 
-.key-value {
-    font-size: 0.75rem;
-    font-family: monospace;
-    color: var(--text-secondary);
+.key-table tbody tr:hover {
     background-color: var(--hover-bg);
-    padding: 0.2rem 0.4rem;
+}
+
+.key-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* 表格列宽 */
+.col-key-name {
+    width: 20%;
+}
+
+.col-key-value {
+    width: 45%;
+}
+
+.col-key-time {
+    width: 20%;
+}
+
+.col-key-actions {
+    width: 15%;
+    text-align: center;
+}
+
+/* 单元格样式 */
+.cell-key-name {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+.cell-key-value code {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    background-color: var(--hover-bg);
+    padding: 0.25rem 0.5rem;
     border-radius: 4px;
     word-break: break-all;
-    margin-top: 0.25rem;
+    display: inline-block;
+    max-width: 100%;
     max-height: 4rem;
     overflow-y: auto;
 }
 
-.key-item-actions {
+.cell-key-time {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.cell-key-actions {
+    text-align: center;
+}
+
+.cell-key-actions .action-buttons {
     display: flex;
+    justify-content: center;
     gap: 0.5rem;
+}
+
+/* 默认密钥标记 */
+.default-badge {
+    display: inline-block;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* 添加密钥行 */
+.add-key-row {
+    background-color: var(--bg-color);
+}
+
+.add-key-row:hover {
+    background-color: var(--bg-color) !important;
+}
+
+.add-key-cell {
+    padding: 0.75rem 1rem !important;
+}
+
+.add-key-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.add-key-placeholder:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.btn-add-key {
+    font-size: 1.25rem;
+    color: inherit;
+}
+
+.add-key-form {
+    padding: 0.5rem;
+}
+
+.add-key-form .form-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.add-key-form input[type="text"] {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    font-size: 0.875rem;
+    transition: var(--transition);
+}
+
+.add-key-form input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+}
+
+.add-key-form input[name="new-key-name"] {
+    width: 150px;
+}
+
+.add-key-form input[name="new-key-value"] {
+    flex: 1;
+    min-width: 200px;
+}
+
+/* 加载行 */
+.loading-row {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.loading-row td {
+    padding: 2rem !important;
+}
+
+/* 空状态 */
+.empty-row {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.empty-row td {
+    padding: 2rem !important;
 }
 
 /* 密钥选择容器 */
@@ -1379,8 +1517,7 @@ input:checked + .toggle-label:before {
     box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
 }
 
-/* 密钥表单 */
-.add-key-form textarea,
+/* 编辑对话框 */
 #edit-key-value {
     width: 100%;
     padding: 0.5rem;
@@ -1394,7 +1531,6 @@ input:checked + .toggle-label:before {
     transition: var(--transition);
 }
 
-.add-key-form textarea:focus,
 #edit-key-value:focus {
     outline: none;
     border-color: var(--primary-color);

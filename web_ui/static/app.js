@@ -15,7 +15,6 @@ class MemOSWebUI {
         // 新增密钥管理相关属性
         this.apiKeys = [];  // 存储密钥列表
         this.currentEditingKeyId = null;  // 当前正在编辑的密钥ID
-        this.keyManagementExpanded = false;  // 密钥管理区域是否展开
 
         // 初始化事件监听
         this.initEventListeners();
@@ -71,8 +70,7 @@ class MemOSWebUI {
         document.getElementById('bot-new-session-upload')?.addEventListener('change', () => this.markUnsaved());
 
         // 密钥管理相关
-        document.getElementById('key-management-toggle')?.addEventListener('click', () => this.toggleKeyManagement());
-        document.getElementById('add-key-btn')?.addEventListener('click', async () => await this.handleAddKey());
+        document.getElementById('key-management-menu-item')?.addEventListener('click', () => this.showKeyManagementPage());
         document.getElementById('apply-api-key-to-all')?.addEventListener('click', async () => await this.applyApiKeyToAll());
 
         // Bot配置输入监听
@@ -516,6 +514,9 @@ class MemOSWebUI {
         });
         document.querySelector(`[data-bot-id="${botId}"]`)?.classList.add('active');
 
+        // 移除密钥管理菜单项的active状态
+        document.getElementById('key-management-menu-item')?.classList.remove('active');
+
         this.currentBotId = botId;
         this.currentBotName = botName;
 
@@ -529,8 +530,15 @@ class MemOSWebUI {
         document.getElementById('bot-config-panel').style.display = 'block';
         document.getElementById('sessions-panel').style.display = 'block';
 
-        // 启用重置按钮
-        document.getElementById('reset-btn').disabled = false;
+        // 隐藏密钥管理面板
+        document.getElementById('key-management-panel').style.display = 'none';
+
+        // 启用并显示重置按钮
+        const resetBtn = document.getElementById('reset-btn');
+        if (resetBtn) {
+            resetBtn.disabled = false;
+            resetBtn.style.display = 'block';
+        }
 
         // 加载Bot配置
         await this.loadBotConfig(botId);
@@ -1343,43 +1351,72 @@ class MemOSWebUI {
         }
     }
 
-    // 渲染密钥管理UI
-    renderKeyManagement() {
-        const keysList = document.getElementById('api-keys-list');
-        if (!keysList) return;
+    // 渲染密钥管理UI（表格形式）
+    async renderKeyManagement() {
+        const tableBody = document.getElementById('key-table-body');
+        if (!tableBody) return;
 
+        tableBody.innerHTML = '';
+
+        // 如果没有密钥，显示空状态
         if (this.apiKeys.length === 0) {
-            keysList.innerHTML = '<div class="empty-state">暂无自定义密钥，请添加新的API密钥</div>';
-            return;
-        }
+            const emptyRow = document.createElement('tr');
+            emptyRow.className = 'empty-row';
+            emptyRow.innerHTML = `
+                <td colspan="4">
+                    <i class="fas fa-inbox"></i>
+                    <p>暂无密钥，点击下方添加新密钥</p>
+                </td>
+            `;
+            tableBody.appendChild(emptyRow);
+        } else {
+            // 渲染密钥行
+            for (const key of this.apiKeys) {
+                const row = document.createElement('tr');
+                row.setAttribute('data-key-id', key.id);
+                row.className = key.is_default ? 'key-row default-key' : 'key-row';
 
-        const template = document.getElementById('key-item-template');
-        if (!template) return;
+                const isDefault = key.is_default;
+                const actionsHtml = isDefault
+                    ? '<span class="default-badge">默认</span>'
+                    : `
+                        <div class="action-buttons">
+                            <button class="btn-icon btn-edit-key" title="编辑密钥">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn-icon btn-delete-key" title="删除密钥">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
 
-        keysList.innerHTML = '';
+                // AES解密显示的密钥值
+                let displayValue = key.value || '';
+                if (displayValue) {
+                    try {
+                        displayValue = await CryptoUtils.decrypt(displayValue);
+                    } catch (e) {
+                        // 如果解密失败，保持原样显示
+                        displayValue = key.value;
+                    }
+                }
 
-        this.apiKeys.forEach(key => {
-            const keyHtml = template.innerHTML
-                .replace(/{id}/g, key.id)
-                .replace(/{name}/g, key.name)
-                .replace(/{created_at}/g, new Date(key.created_at).toLocaleString())
-                .replace(/{value}/g, key.value || '');
+                row.innerHTML = `
+                    <td class="cell-key-name">${this.escapeHtml(key.name)}</td>
+                    <td class="cell-key-value">
+                        <code>${this.escapeHtml(displayValue)}</code>
+                    </td>
+                    <td class="cell-key-time">${new Date(key.created_at).toLocaleString()}</td>
+                    <td class="cell-key-actions">${actionsHtml}</td>
+                `;
 
-            const keyElement = document.createElement('div');
-            keyElement.innerHTML = keyHtml;
-            keysList.appendChild(keyElement.firstElementChild);
+                tableBody.appendChild(row);
 
-            // 添加事件监听
-            const keyItem = keysList.querySelector(`[data-key-id="${key.id}"]`);
-            if (keyItem) {
-                const editBtn = keyItem.querySelector('.btn-edit-key');
-                const deleteBtn = keyItem.querySelector('.btn-delete-key');
+                // 添加事件监听（非默认密钥）
+                if (!isDefault) {
+                    const editBtn = row.querySelector('.btn-edit-key');
+                    const deleteBtn = row.querySelector('.btn-delete-key');
 
-                // 如果是默认密钥，隐藏编辑和删除按钮
-                if (key.is_default) {
-                    if (editBtn) editBtn.style.display = 'none';
-                    if (deleteBtn) deleteBtn.style.display = 'none';
-                } else {
                     if (editBtn) {
                         editBtn.addEventListener('click', () => this.showKeyEditDialog(key.id));
                     }
@@ -1388,6 +1425,67 @@ class MemOSWebUI {
                     }
                 }
             }
+        }
+
+        // 添加最后一行（添加新密钥行）
+        this.renderAddKeyRow(tableBody);
+    }
+
+    // 渲染添加密钥行
+    renderAddKeyRow(tableBody) {
+        const addRow = document.createElement('tr');
+        addRow.className = 'key-row add-key-row';
+        addRow.id = 'add-key-row';
+
+        addRow.innerHTML = `
+            <td colspan="4" class="add-key-cell">
+                <div class="add-key-placeholder" id="add-key-placeholder">
+                    <button class="btn-icon btn-add-key" title="添加新密钥">
+                        <i class="fas fa-plus-circle"></i>
+                    </button>
+                    <span>点击添加新密钥</span>
+                </div>
+                <div class="add-key-form" id="add-key-form" style="display: none;">
+                    <div class="form-row">
+                        <input type="text" id="new-key-name" placeholder="密钥名称" maxlength="50">
+                        <input type="text" id="new-key-value" placeholder="MemOS API密钥">
+                        <button class="btn btn-small btn-primary" id="save-new-key-btn">
+                            <i class="fas fa-save"></i> 保存
+                        </button>
+                        <button class="btn btn-small btn-secondary" id="cancel-add-key-btn">
+                            <i class="fas fa-times"></i> 取消
+                        </button>
+                    </div>
+                </div>
+            </td>
+        `;
+
+        tableBody.appendChild(addRow);
+
+        // 添加事件监听
+        const placeholder = addRow.querySelector('#add-key-placeholder');
+        const form = addRow.querySelector('#add-key-form');
+        const saveBtn = addRow.querySelector('#save-new-key-btn');
+        const cancelBtn = addRow.querySelector('#cancel-add-key-btn');
+
+        placeholder?.addEventListener('click', () => {
+            placeholder.style.display = 'none';
+            form.style.display = 'block';
+            addRow.querySelector('#new-key-name')?.focus();
+        });
+
+        saveBtn?.addEventListener('click', async () => {
+            await this.handleAddKeyFromTable();
+        });
+
+        cancelBtn?.addEventListener('click', () => {
+            form.style.display = 'none';
+            placeholder.style.display = 'flex';
+            // 清空输入
+            const nameInput = addRow.querySelector('#new-key-name');
+            const valueInput = addRow.querySelector('#new-key-value');
+            if (nameInput) nameInput.value = '';
+            if (valueInput) valueInput.value = '';
         });
     }
 
@@ -1454,30 +1552,58 @@ class MemOSWebUI {
         });
     }
 
-    // 切换密钥管理区域显示/隐藏
-    toggleKeyManagement() {
-        const content = document.querySelector('.key-management-content');
-        const toggleBtn = document.getElementById('key-management-toggle');
+    // 显示密钥管理页面
+    showKeyManagementPage() {
+        // 检查是否有未保存的更改
+        if (this.unsavedChanges) {
+            if (!confirm('您有未保存的更改，确定要离开吗？未保存的更改将丢失。')) {
+                return;
+            }
+            this.unsavedChanges = false;
+        }
 
-        if (!content || !toggleBtn) return;
+        // 隐藏Bot配置相关面板
+        document.getElementById('bot-config-panel').style.display = 'none';
+        document.getElementById('sessions-panel').style.display = 'none';
 
-        this.keyManagementExpanded = !this.keyManagementExpanded;
+        // 显示密钥管理面板
+        document.getElementById('key-management-panel').style.display = 'block';
 
-        if (this.keyManagementExpanded) {
-            content.style.display = 'block';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
-            // 总是加载密钥列表以确保数据最新
-            this.loadApiKeys();
-        } else {
-            content.style.display = 'none';
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+        // 更新工具栏标题
+        document.getElementById('current-bot-title').textContent = 'MemOS 密钥管理';
+        document.getElementById('bot-info').style.display = 'none';
+
+        // 隐藏重置按钮（密钥管理页面不需要）
+        const resetBtn = document.getElementById('reset-btn');
+        if (resetBtn) resetBtn.style.display = 'none';
+
+        // 移除所有Bot项的active状态
+        document.querySelectorAll('.bot-item').forEach(item => {
+            item.classList.remove('active');
+        });
+
+        // 添加密钥管理菜单项的active状态
+        document.querySelectorAll('.sidebar-menu-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        document.getElementById('key-management-menu-item')?.classList.add('active');
+
+        // 加载密钥列表
+        this.loadApiKeys();
+
+        // 移动端关闭侧边栏
+        if (window.innerWidth <= 768) {
+            this.closeSidebar();
         }
     }
 
-    // 添加新密钥
-    async handleAddKey() {
-        const nameInput = document.getElementById('new-key-name');
-        const valueInput = document.getElementById('new-key-value');
+    // 添加新密钥（从表格）
+    async handleAddKeyFromTable() {
+        const addRow = document.getElementById('add-key-row');
+        if (!addRow) return;
+
+        const nameInput = addRow.querySelector('#new-key-name');
+        const valueInput = addRow.querySelector('#new-key-value');
 
         if (!nameInput || !valueInput) return;
 
@@ -1494,29 +1620,32 @@ class MemOSWebUI {
             return;
         }
 
-        // 检查名称是否已存在
+        // 检查名称是否为default（保留名称）
+        if (name.toLowerCase() === 'default') {
+            this.showToast('"default"为保留名称，请使用其他名称', 'error');
+            return;
+        }
+
+        // 检查名称是否已存在（包括和默认密钥比较）
         if (this.apiKeys.some(key => key.name === name)) {
             this.showToast('密钥名称已存在，请使用其他名称', 'error');
             return;
         }
 
         try {
-            // base64编码密钥值
-            const base64Value = btoa(value);
+            // AES加密密钥值
+            const encryptedValue = await CryptoUtils.encrypt(value);
 
             const response = await this.apiRequest('/api/keys', {
                 method: 'POST',
                 body: JSON.stringify({
                     name: name,
-                    value: base64Value
+                    value: encryptedValue
                 })
             });
 
             if (response.success) {
                 this.showToast('密钥添加成功', 'success');
-                // 清空输入框
-                nameInput.value = '';
-                valueInput.value = '';
                 // 重新加载密钥列表
                 await this.loadApiKeys();
             } else {
@@ -1561,7 +1690,7 @@ class MemOSWebUI {
     }
 
     // 显示密钥编辑对话框
-    showKeyEditDialog(keyId) {
+    async showKeyEditDialog(keyId) {
         const key = this.apiKeys.find(k => k.id === keyId);
         if (!key) return;
 
@@ -1572,7 +1701,17 @@ class MemOSWebUI {
         const overlay = document.getElementById('key-edit-overlay');
 
         if (nameInput) nameInput.value = key.name;
-        if (valueInput) valueInput.value = key.value || ''; // 显示解密后的密钥值
+        // AES解密显示的密钥值
+        let displayValue = key.value || '';
+        if (displayValue) {
+            try {
+                displayValue = await CryptoUtils.decrypt(displayValue);
+            } catch (e) {
+                // 如果解密失败，保持原样显示
+                displayValue = key.value;
+            }
+        }
+        if (valueInput) valueInput.value = displayValue;
         if (overlay) overlay.style.display = 'flex';
     }
 
@@ -1600,6 +1739,12 @@ class MemOSWebUI {
             return;
         }
 
+        // 检查名称是否为default（保留名称）
+        if (name.toLowerCase() === 'default') {
+            this.showToast('"default"为保留名称，请使用其他名称', 'error');
+            return;
+        }
+
         try {
             const updateData = {};
 
@@ -1612,9 +1757,9 @@ class MemOSWebUI {
 
             updateData.name = name;
 
-            // 如果提供了新密钥值，则base64编码
+            // 如果提供了新密钥值，进行AES加密
             if (value) {
-                updateData.value = btoa(value);
+                updateData.value = await CryptoUtils.encrypt(value);
             }
 
             const response = await this.apiRequest(`/api/keys/${this.currentEditingKeyId}`, {

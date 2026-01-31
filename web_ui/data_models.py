@@ -23,7 +23,6 @@ class ApiKeyInfo(BaseModel):
     """API密钥信息模型"""
     id: str = Field(..., description="密钥ID")
     name: str = Field(..., description="密钥名称")
-    source: Literal["plugin_config", "user_defined"] = Field(..., description="密钥来源")
     created_at: str = Field(..., description="创建时间")
     is_default: bool = Field(default=False, description="是否为默认密钥")
     value: Optional[str] = Field(None, description="解密后的密钥值")

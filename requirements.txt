@@ -9,3 +9,4 @@ PyJWT[crypto]>=2.8.0  # 使用PyJWT替代python-jose，避免Python2/3兼容性�
 passlib[bcrypt]>=1.7.4
 python-multipart>=0.0.6
 pydantic>=2.0.0
+cryptography>=41.0.0  # AES加密传输

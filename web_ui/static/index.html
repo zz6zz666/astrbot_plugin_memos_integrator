@@ -93,42 +93,9 @@
                         </div>
                     </div>
                     <div class="sidebar-footer">
-                        <div class="memos-key-management">
-                            <div class="sidebar-title">
-                                <h3><i class="fas fa-key"></i> MemOS 密钥管理</h3>
-                                <button id="key-management-toggle" class="btn-icon">
-                                    <i class="fas fa-chevron-down"></i>
-                                </button>
-                            </div>
-                            <div class="key-management-content" style="display: none;">
-                                <!-- 密钥列表 -->
-                                <div id="api-keys-list" class="key-list">
-                                    <div class="loading-state">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <p>加载密钥列表中...</p>
-                                    </div>
-                                </div>
-
-                                <!-- 添加密钥表单 -->
-                                <div class="add-key-form" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                                    <h4><i class="fas fa-plus-circle"></i> 添加新密钥</h4>
-                                    <div class="form-group">
-                                        <label for="new-key-name">密钥名称</label>
-                                        <input type="text" id="new-key-name" placeholder="输入密钥名称" maxlength="50">
-                                        <div class="form-hint">密钥名称必须唯一，最多50个字符</div>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="new-key-value">MemOS API密钥</label>
-                                        <textarea id="new-key-value" rows="3" placeholder="粘贴MemOS API密钥"></textarea>
-                                        <div class="form-hint">密钥值将进行加密存储，请确保输入正确的API密钥</div>
-                                    </div>
-                                    <div class="form-actions">
-                                        <button id="add-key-btn" class="btn btn-small btn-primary">
-                                            <i class="fas fa-plus"></i> 添加密钥
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="sidebar-menu-item" id="key-management-menu-item">
+                            <i class="fas fa-key"></i>
+                            <span>MemOS 密钥管理</span>
                         </div>
                     </div>
                 </aside>
@@ -360,6 +327,39 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 密钥管理页面 -->
+                        <div class="config-panel" id="key-management-panel" style="display: none;">
+                            <div class="panel-header">
+                                <div class="panel-header-left">
+                                    <h3><i class="fas fa-key"></i> MemOS 密钥管理</h3>
+                                    <p class="panel-subtitle">管理MemOS API密钥</p>
+                                </div>
+                            </div>
+                            <div class="panel-body">
+                                <!-- 密钥表格 -->
+                                <div class="key-table-container">
+                                    <table class="key-table" id="key-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="col-key-name">密钥名称</th>
+                                                <th class="col-key-value">密钥值</th>
+                                                <th class="col-key-time">创建时间</th>
+                                                <th class="col-key-actions">操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="key-table-body">
+                                            <!-- 密钥行将通过JavaScript动态加载 -->
+                                            <tr class="loading-row">
+                                                <td colspan="4" class="text-center">
+                                                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -391,58 +391,33 @@
     </div>
 
     <!-- JavaScript文件 -->
+    <script src="/static/crypto.js"></script>
     <script src="/static/app.js"></script>
 
-    <!-- 密钥项模板 (隐藏) -->
-    <template id="key-item-template">
-        <div class="key-item" data-key-id="{id}">
-            <div class="key-item-header">
-                <div class="key-item-info">
-                    <i class="fas fa-key"></i>
-                    <div class="key-item-details">
-                        <span class="key-name">{name}</span>
-                        <span class="key-time">创建于: {created_at}</span>
-                        <span class="key-value">密钥: {value}</span>
-                    </div>
+    <!-- 密钥编辑对话框 -->
+    <div class="modal-overlay" id="key-edit-overlay" style="display: none;">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit"></i> 编辑API密钥</h3>
+                <button class="btn-icon btn-close-modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="edit-key-name">密钥名称</label>
+                    <input type="text" id="edit-key-name" placeholder="输入密钥名称" maxlength="50">
                 </div>
-                <div class="key-item-actions">
-                    <button class="btn-icon btn-edit-key" title="编辑密钥">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn-icon btn-delete-key" title="删除密钥">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                <div class="form-group">
+                    <label for="edit-key-value">MemOS API密钥（留空则不更改）</label>
+                    <textarea id="edit-key-value" rows="3" placeholder="输入新密钥值（留空则保持原值）"></textarea>
                 </div>
             </div>
-        </div>
-    </template>
-
-    <!-- 密钥编辑对话框模板 -->
-    <template id="key-edit-dialog-template">
-        <div class="modal-overlay" id="key-edit-overlay" style="display: none;">
-            <div class="modal-dialog">
-                <div class="modal-header">
-                    <h3><i class="fas fa-edit"></i> 编辑API密钥</h3>
-                    <button class="btn-icon btn-close-modal">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="edit-key-name">密钥名称</label>
-                        <input type="text" id="edit-key-name" placeholder="输入密钥名称" maxlength="50">
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-key-value">MemOS API密钥（留空则不更改）</label>
-                        <textarea id="edit-key-value" rows="3" placeholder="输入新密钥值（留空则保持原值）"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-secondary btn-cancel-edit">取消</button>
-                    <button class="btn btn-primary btn-save-edit">保存更改</button>
-                </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary btn-cancel-edit">取消</button>
+                <button class="btn btn-primary btn-save-edit">保存更改</button>
             </div>
         </div>
-    </template>
+    </div>
 </body>
 </html>

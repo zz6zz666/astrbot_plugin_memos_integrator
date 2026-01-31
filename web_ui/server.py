@@ -22,6 +22,7 @@ from .data_models import (
 )
 from .config_manager import ConfigManager
 from .data_fetcher import DataFetcher
+from .crypto_utils import get_transport_crypto, DEFAULT_TRANSPORT_KEY
 
 
 def create_app(plugin_instance):
@@ -165,9 +166,19 @@ def create_app(plugin_instance):
     async def get_api_keys(
         current_user: dict = Depends(get_current_user_dependency)
     ):
-        """获取API密钥列表（不包含实际密钥值）"""
+        """获取API密钥列表（密钥值使用传输加密）"""
         keys = config_manager.get_api_keys()
-        return ApiKeyListResponse(keys=keys)
+
+        # 对密钥值进行传输加密
+        crypto = get_transport_crypto()
+        encrypted_keys = []
+        for key in keys:
+            key_dict = key.dict()
+            if key_dict.get('value'):
+                key_dict['value'] = crypto.encrypt(key_dict['value'])
+            encrypted_keys.append(ApiKeyInfo(**key_dict))
+
+        return ApiKeyListResponse(keys=encrypted_keys)
 
     @app.post("/api/keys", response_model=dict)
     async def create_api_key(
@@ -176,18 +187,17 @@ def create_app(plugin_instance):
     ):
         """创建新的API密钥"""
         try:
-            # 验证base64编码
-            import base64
-            try:
-                # 尝试解码验证
-                base64.b64decode(request_data.value)
-            except Exception:
+            # 解密传输的密钥值
+            crypto = get_transport_crypto()
+            decrypted_value = crypto.decrypt(request_data.value)
+
+            if decrypted_value is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="密钥值必须是有效的base64编码"
+                    detail="密钥值解密失败，请检查加密格式"
                 )
 
-            key_id = config_manager.add_api_key(request_data.name, request_data.value)
+            key_id = config_manager.add_api_key(request_data.name, decrypted_value)
             if not key_id:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -211,21 +221,22 @@ def create_app(plugin_instance):
     ):
         """更新API密钥信息"""
         try:
-            # 验证base64编码（如果提供了新值）
+            # 解密传输的密钥值（如果提供了新值）
+            decrypted_value = None
             if request_data.value is not None:
-                import base64
-                try:
-                    base64.b64decode(request_data.value)
-                except Exception:
+                crypto = get_transport_crypto()
+                decrypted_value = crypto.decrypt(request_data.value)
+
+                if decrypted_value is None:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="密钥值必须是有效的base64编码"
+                        detail="密钥值解密失败，请检查加密格式"
                     )
 
             success = config_manager.update_api_key(
                 key_id,
                 name=request_data.name,
-                value=request_data.value
+                value=decrypted_value
             )
             if not success:
                 raise HTTPException(
