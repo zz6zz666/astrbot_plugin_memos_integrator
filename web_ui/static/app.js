@@ -91,6 +91,9 @@ class MemOSWebUI {
         // 提示对话框事件
         this.initAlertDialog();
 
+        // 用户画像弹窗事件
+        this.initUserProfileDialog();
+
         // 窗口事件
         window.addEventListener('beforeunload', (e) => {
             if (this.unsavedChanges) {
@@ -227,6 +230,37 @@ class MemOSWebUI {
                     this.alertDialogResolve();
                 }
                 this.hideAlertDialog();
+            }
+        });
+    }
+
+    // 初始化用户画像弹窗
+    initUserProfileDialog() {
+        const overlay = document.getElementById('user-profile-overlay');
+        const closeBtn = document.getElementById('user-profile-close');
+        const okBtn = document.getElementById('user-profile-ok');
+        const copyBtn = document.getElementById('user-profile-copy');
+
+        // 关闭按钮
+        closeBtn?.addEventListener('click', () => this.hideUserProfileDialog());
+
+        // 确定按钮
+        okBtn?.addEventListener('click', () => this.hideUserProfileDialog());
+
+        // 复制按钮
+        copyBtn?.addEventListener('click', () => this.copyUserProfileContent());
+
+        // 点击遮罩层关闭
+        overlay?.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.hideUserProfileDialog();
+            }
+        });
+
+        // ESC键关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && overlay?.style.display === 'flex') {
+                this.hideUserProfileDialog();
             }
         });
     }
@@ -1023,9 +1057,270 @@ class MemOSWebUI {
         await this.showAlertDialog('查看记忆功能开发中...\n会话ID: ' + sessionId, '功能开发中');
     }
 
-    // 用户画像（占位符）
+    // 用户画像
     async viewUserProfile(sessionId) {
-        await this.showAlertDialog('用户画像功能开发中...\n会话ID: ' + sessionId, '功能开发中');
+        if (!this.currentBotId) {
+            await this.showAlertDialog('请先选择Bot', '提示');
+            return;
+        }
+
+        // 显示用户画像弹窗
+        this.showUserProfileDialog(sessionId);
+
+        // 请求用户画像数据
+        await this.fetchUserProfile(this.currentBotId, sessionId);
+    }
+
+    // 显示用户画像弹窗
+    showUserProfileDialog(sessionId) {
+        const overlay = document.getElementById('user-profile-overlay');
+        const userIdEl = document.getElementById('user-profile-user-id');
+        const contentEl = document.getElementById('user-profile-content');
+        const loadingEl = document.getElementById('user-profile-loading');
+
+        if (overlay) {
+            // 重置状态
+            userIdEl.textContent = sessionId;
+            contentEl.innerHTML = '';
+            contentEl.style.display = 'none';
+            loadingEl.style.display = 'flex';
+
+            overlay.style.display = 'flex';
+        }
+    }
+
+    // 隐藏用户画像弹窗
+    hideUserProfileDialog() {
+        const overlay = document.getElementById('user-profile-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+
+    // 获取用户画像数据（直接请求MemOS服务器）
+    async fetchUserProfile(botId, sessionId) {
+        const contentEl = document.getElementById('user-profile-content');
+        const loadingEl = document.getElementById('user-profile-loading');
+        const userIdEl = document.getElementById('user-profile-user-id');
+
+        try {
+            // 1. 先从后端获取MemOS配置
+            const configResponse = await this.apiRequest(`/api/memos-config/${botId}/${sessionId}`);
+
+            if (!configResponse.base_url || !configResponse.api_key) {
+                throw new Error('MemOS配置不完整');
+            }
+
+            // 更新用户ID显示
+            userIdEl.textContent = configResponse.user_id || sessionId;
+
+            // 2. 解密API密钥
+            const decryptedApiKey = await CryptoUtils.decrypt(configResponse.api_key);
+
+            // 3. 直接请求MemOS服务器的 /search/memory 端点
+            const memosResponse = await fetch(`${configResponse.base_url}/search/memory`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${decryptedApiKey}`
+                },
+                body: JSON.stringify({
+                    query: '我的人物关键词是什么？',
+                    user_id: configResponse.user_id
+                })
+            });
+
+            // 隐藏加载动画
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+
+            if (!memosResponse.ok) {
+                const errorData = await memosResponse.json().catch(() => ({}));
+                throw new Error(errorData.error?.message || errorData.message || `MemOS服务器返回错误: ${memosResponse.status}`);
+            }
+
+            // MemOS API返回格式: {code: 0, message: "...", data: {...}}
+            const memosResult = await memosResponse.json();
+
+            // 检查code是否为0（成功）
+            if (memosResult.code !== 0) {
+                throw new Error(memosResult.message || `API错误 (code=${memosResult.code})`);
+            }
+
+            // 获取data字段
+            const data = memosResult.data || {};
+
+            // 4. 生成用户画像报告（直接生成HTML）
+            const profileContent = this.generateUserProfileReport(data);
+
+            // 直接渲染HTML内容
+            contentEl.innerHTML = profileContent;
+
+        } catch (error) {
+            // 隐藏加载动画
+            loadingEl.style.display = 'none';
+            contentEl.style.display = 'block';
+            contentEl.innerHTML = `<div class="error-message">获取用户画像失败: ${this.escapeHtml(error.message)}</div>`;
+        }
+    }
+
+    // 生成用户画像HTML报告（使用漂亮的HTML格式直接渲染）
+    generateUserProfileReport(data) {
+        // 如果没有数据
+        if (!data) {
+            return '<div class="profile-empty">🧠 未找到相关记忆</div>';
+        }
+
+        const memoryDetailList = data.memory_detail_list;
+        const preferenceDetailList = data.preference_detail_list;
+
+        let html = '<div class="profile-report">';
+
+        // --- 1. 渲染事实记忆（左侧）---
+        html += '<div class="profile-section memory-section">';
+        if (memoryDetailList && memoryDetailList.length > 0) {
+            html += '<div class="profile-section-title">🧠 用户画像报告</div>';
+
+            for (const item of memoryDetailList) {
+                const createTime = this.tsToBeijing(item.create_time);
+                const confidence = item.confidence !== undefined ? item.confidence.toFixed(2) : 'N/A';
+                const relativity = item.relativity !== undefined ? item.relativity.toFixed(6) : 'N/A';
+
+                html += '<div class="memory-card">';
+                html += `<div class="memory-header">`;
+                html += `<span class="memory-title">${this.escapeHtml(item.memory_key)}</span>`;
+                html += `<span class="memory-time">⏰ ${createTime}</span>`;
+                html += `</div>`;
+                html += `<div class="memory-content">${this.escapeHtml(item.memory_value)}</div>`;
+
+                // 标签
+                if (item.tags && Array.isArray(item.tags) && item.tags.length > 0) {
+                    html += '<div class="memory-tags">';
+                    item.tags.forEach(tag => {
+                        html += `<span class="memory-tag">${this.escapeHtml(tag)}</span>`;
+                    });
+                    html += '</div>';
+                }
+
+                // 元数据
+                html += '<div class="memory-meta">';
+                html += `<span class="meta-item" title="置信度">📊 ${confidence}</span>`;
+                html += `<span class="meta-item" title="相关性">🔗 ${relativity}</span>`;
+                html += `<span class="meta-item" title="记忆类型">💾 ${this.escapeHtml(item.memory_type || 'N/A')}</span>`;
+                html += '</div>';
+
+                html += '</div>'; // end memory-card
+            }
+        } else {
+            html += '<div class="profile-section-title">🧠 用户画像报告</div>';
+            html += '<div class="profile-empty">未找到相关记忆</div>';
+        }
+        html += '</div>'; // end memory-section
+
+        // --- 2. 渲染偏好记忆（右侧）---
+        html += '<div class="profile-section preference-section">';
+        if (preferenceDetailList && preferenceDetailList.length > 0) {
+            html += '<div class="profile-section-title">🔍 偏好洞察区（系统推断）</div>';
+
+            for (let i = 0; i < preferenceDetailList.length; i++) {
+                const pref = preferenceDetailList[i];
+                const isExplicit = pref.preference_type === 'explicit_preference';
+                const typeClass = isExplicit ? 'explicit' : 'implicit';
+                const typeLabel = isExplicit ? '显式' : '隐式';
+                const typeIcon = isExplicit ? '✅' : '💡';
+
+                html += '<div class="preference-card">';
+                html += `<div class="preference-header">`;
+                html += `<span class="preference-number">${i + 1}</span>`;
+                html += `<span class="preference-type ${typeClass}">${typeIcon} ${typeLabel}偏好</span>`;
+                html += `</div>`;
+                html += `<div class="preference-content">${this.escapeHtml(pref.preference)}</div>`;
+                html += `<div class="preference-time">🕒 ${this.tsToBeijing(pref.create_time)}</div>`;
+                html += `<div class="preference-reasoning">`;
+                html += `<div class="reasoning-label">💡 推理依据</div>`;
+                html += `<div class="reasoning-content">${this.escapeHtml(pref.reasoning)}</div>`;
+                html += `</div>`;
+                html += '</div>'; // end preference-card
+            }
+        } else {
+            html += '<div class="profile-section-title">🔍 偏好洞察区（系统推断）</div>';
+            html += '<div class="profile-empty">未找到偏好数据</div>';
+        }
+        html += '</div>'; // end preference-section
+
+        // --- 3. 底部说明（跨两列）---
+        if (data.preference_note) {
+            html += `<div class="profile-note">${this.escapeHtml(data.preference_note)}</div>`;
+        }
+
+        html += '</div>'; // end profile-report
+        return html;
+    }
+
+    // 时间戳转换为北京时间（复刻后端的 ts_to_beijing 函数）
+    tsToBeijing(ts) {
+        if (typeof ts === 'number') {
+            // 毫秒时间戳转换为秒
+            if (ts > 1000000000000) {
+                ts = ts / 1000;
+            }
+            // 转换为北京时间 (UTC+8)
+            const date = new Date(ts * 1000);
+            const beijingTime = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+            const year = beijingTime.getUTCFullYear();
+            const month = String(beijingTime.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(beijingTime.getUTCDate()).padStart(2, '0');
+            const hours = String(beijingTime.getUTCHours()).padStart(2, '0');
+            const minutes = String(beijingTime.getUTCMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}`;
+        }
+        return String(ts);
+    }
+
+    // 简单的Markdown渲染
+    renderMarkdown(text) {
+        if (!text) return '';
+
+        let html = this.escapeHtml(text);
+
+        // 标题
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+        // 粗体
+        html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+        // 斜体
+        html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+        // 代码块
+        html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+
+        // 行内代码
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // 列表项
+        html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+
+        // 换行
+        html = html.replace(/\n/g, '<br>');
+
+        return html;
+    }
+
+    // 复制用户画像内容
+    copyUserProfileContent() {
+        const contentEl = document.getElementById('user-profile-content');
+        if (contentEl) {
+            const text = contentEl.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                this.showToast('内容已复制到剪贴板', 'success');
+            }).catch(() => {
+                this.showToast('复制失败', 'error');
+            });
+        }
     }
 
     // 展开所有会话

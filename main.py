@@ -20,7 +20,7 @@ from .web_ui.config_manager import ConfigManager
 from .web_ui.data_models import BotConfig
 
 # 主插件类
-@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "1.6.0")
+@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "3.0.0")
 class MemosIntegratorPlugin(Star):
     PLUGIN_ID = "astrbot_plugin_memos_integrator"
     

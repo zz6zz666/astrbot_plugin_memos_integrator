@@ -114,3 +114,24 @@ class ApplySwitchResponse(BaseModel):
     updated_sessions: int = Field(..., description="成功更新的会话数")
     failed_sessions: List[str] = Field(default=[], description="失败的会话ID列表")
     message: str = Field(..., description="消息")
+
+
+class UserProfileRequest(BaseModel):
+    """用户画像请求模型"""
+    bot_id: str = Field(..., description="Bot ID")
+    session_id: str = Field(..., description="会话ID")
+
+
+class UserProfileResponse(BaseModel):
+    """用户画像响应模型"""
+    success: bool = Field(..., description="是否成功")
+    user_id: str = Field(..., description="用户ID")
+    profile_content: str = Field(..., description="用户画像内容（Markdown格式）")
+    message: str = Field(default="", description="错误消息")
+
+
+class MemosConfigResponse(BaseModel):
+    """MemOS服务器配置响应模型"""
+    base_url: str = Field(..., description="MemOS服务器基础URL")
+    api_key: str = Field(..., description="API密钥（已加密）")
+    user_id: str = Field(..., description="用户ID")

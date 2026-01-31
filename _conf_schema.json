@@ -1,8 +1,8 @@
 {
   "api_key": {
     "type": "string",
-    "description": "MemOS API密钥",
-    "hint": "从MemOS获取的API密钥",
+    "description": "MemOS API默认密钥",
+    "hint": "可在WebUI中添加并使用更多密钥",
     "obvious_hint": true
   },
   "base_url": {

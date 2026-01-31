@@ -18,7 +18,8 @@ from .data_models import (
     BotTreeItem, ConfigTreeResponse, SaveConfigRequest,
     SaveConfigResponse, HealthResponse, BotConfig,
     ApplySwitchRequest, ApplySwitchResponse,
-    ApiKeyInfo, ApiKeyListResponse, CreateApiKeyRequest, UpdateApiKeyRequest
+    ApiKeyInfo, ApiKeyListResponse, CreateApiKeyRequest, UpdateApiKeyRequest,
+    UserProfileRequest, UserProfileResponse, MemosConfigResponse
 )
 from .config_manager import ConfigManager
 from .data_fetcher import DataFetcher
@@ -445,6 +446,51 @@ def create_app(plugin_instance):
             success=success,
             message="配置删除成功" if success else "配置删除失败"
         )
+
+    @app.get("/api/memos-config/{bot_id}/{session_id}", response_model=MemosConfigResponse)
+    async def get_memos_config(
+        bot_id: str,
+        session_id: str,
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """获取MemOS服务器配置（用于前端直接请求MemOS服务器）"""
+        try:
+            # 获取生效配置
+            effective_config = config_manager.get_effective_config(bot_id, session_id)
+
+            # 确定user_id
+            user_id = effective_config.custom_user_id if effective_config.custom_user_id else session_id
+
+            # 获取API密钥
+            api_key = ""
+            api_keys = config_manager.config_data.get("api_keys", {})
+            key_id = effective_config.api_key_selection
+
+            if key_id == "default":
+                # 使用插件配置的默认密钥
+                api_key = plugin_instance.config.get("api_key", "")
+            elif key_id in api_keys:
+                api_key = api_keys[key_id].get("value", "")
+
+            # 加密API密钥用于传输
+            if api_key:
+                crypto = get_transport_crypto()
+                api_key = crypto.encrypt(api_key)
+
+            # 获取MemOS服务器地址
+            base_url = plugin_instance.config.get("base_url", "https://memos.memtensor.cn/api/openmem/v1")
+
+            return MemosConfigResponse(
+                base_url=base_url,
+                api_key=api_key,
+                user_id=user_id
+            )
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"获取MemOS配置失败: {str(e)}"
+            )
 
     @app.post("/api/config/bulk", response_model=SaveConfigResponse)
     async def save_bulk_config(

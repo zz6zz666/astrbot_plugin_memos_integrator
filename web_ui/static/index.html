@@ -464,5 +464,34 @@
             </div>
         </div>
     </div>
+
+    <!-- 用户画像弹窗 -->
+    <div class="modal-overlay" id="user-profile-overlay" style="display: none;">
+        <div class="modal-dialog user-profile-dialog">
+            <div class="modal-header">
+                <h3><i class="fas fa-user-circle"></i> 用户画像</h3>
+                <button class="btn-icon btn-close-modal" id="user-profile-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="user-profile-info">
+                    <span class="user-id-label">用户ID:</span>
+                    <span id="user-profile-user-id" class="user-id-value"></span>
+                </div>
+                <div class="user-profile-content-wrapper">
+                    <div id="user-profile-loading" class="loading-container" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <p>正在生成用户画像...</p>
+                    </div>
+                    <div id="user-profile-content" class="user-profile-content markdown-content"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="user-profile-copy">复制内容</button>
+                <button class="btn btn-primary" id="user-profile-ok">关闭</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
