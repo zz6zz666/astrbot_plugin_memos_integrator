@@ -92,6 +92,15 @@ class MemosIntegratorPlugin(Star):
         # 配置管理器初始化
         self.config_manager = ConfigManager(self._data_dir, self)
 
+        # 同步默认API密钥到Web配置
+        try:
+            api_key = self.config.get("api_key", "")
+            # 总是确保默认密钥存在，即使值为空
+            self.config_manager.ensure_default_key_exists(api_key)
+            logger.info("默认API密钥已同步到Web配置")
+        except Exception as e:
+            logger.error(f"同步默认API密钥失败: {e}")
+
         # 如果密码为空，生成随机8位密码
         if not self.web_config["password"]:
             self.web_config["password"] = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
@@ -345,6 +354,34 @@ class MemosIntegratorPlugin(Star):
             logger.warning(f"unified_msg_origin格式异常: {unified_msg_origin}")
             return '', unified_msg_origin
 
+    async def _get_api_key_for_config(self, bot_id: str, session_id: str) -> str:
+        """
+        根据Bot配置获取对应的API密钥值
+
+        Args:
+            bot_id: Bot ID
+            session_id: 会话ID（Web界面格式）
+
+        Returns:
+            解密后的API密钥值，如果获取失败则返回空字符串
+        """
+        try:
+            # 获取生效配置
+            effective_config = self.config_manager.get_effective_config(bot_id, session_id)
+            # 获取密钥ID
+            key_id = effective_config.api_key_selection
+            # 从配置管理器获取解密后的密钥值
+            key_value = self.config_manager.get_api_key_value(key_id)
+            if key_value is None:
+                logger.error(f"API密钥 '{key_id}' 不存在或获取失败，使用默认密钥")
+                # 回退到插件原生配置的API密钥
+                return self.config.get("api_key", "")
+            return key_value
+        except Exception as e:
+            logger.error(f"获取API密钥失败: {e}")
+            # 回退到插件原生配置的API密钥
+            return self.config.get("api_key", "")
+
     @filter.on_llm_request(priority=-1000)
     async def inject_memories(self, event: AstrMessageEvent, req: ProviderRequest):
         """在LLM请求前获取记忆并注入"""
@@ -370,13 +407,17 @@ class MemosIntegratorPlugin(Star):
             effective_config = BotConfig(
                 custom_user_id="",
                 memory_injection_enabled=True,
-                new_session_upload_enabled=True
+                new_session_upload_enabled=True,
+                api_key_selection="default"
             )
 
         # 检查记忆注入开关
         if not effective_config.memory_injection_enabled:
             logger.debug(f"记忆注入已禁用，bot_id={bot_id}, session_id={session_id_web}")
             return
+
+        # 获取API密钥
+        api_key = await self._get_api_key_for_config(bot_id, session_id_web)
 
         conversation_id = await self._get_conversation_id(event)
         user_message = req.prompt
@@ -388,7 +429,7 @@ class MemosIntegratorPlugin(Star):
         user_id = effective_config.custom_user_id if effective_config.custom_user_id else unified_msg_origin
 
         memories = await self.memory_manager.retrieve_relevant_memories(
-            user_message, user_id, conversation_id, limit=self.memory_limit
+            user_message, user_id, conversation_id, limit=self.memory_limit, api_key=api_key
         )
 
         if memories:
@@ -459,13 +500,17 @@ class MemosIntegratorPlugin(Star):
                 effective_config = BotConfig(
                     custom_user_id="",
                     memory_injection_enabled=True,
-                    new_session_upload_enabled=True
+                    new_session_upload_enabled=True,
+                    api_key_selection="default"
                 )
 
             # 检查新会话上传开关
             if not effective_config.new_session_upload_enabled:
                 logger.debug(f"新会话上传已禁用，bot_id={bot_id}, session_id={session_id_web}")
                 return
+
+            # 获取API密钥
+            api_key = await self._get_api_key_for_config(bot_id, session_id_web)
 
             conversation_id = await self._get_conversation_id(event)
             # 为了向后兼容，保留session_id变量作为unified_msg_origin
@@ -512,12 +557,13 @@ class MemosIntegratorPlugin(Star):
                 logger.info(f"会话 {conversation_id} 直接上传1轮对话...")
 
                 # 直接上传任务
-                async def _save_memory_task_direct(msgs, user_id, conv_id):
+                async def _save_memory_task_direct(msgs, user_id, conv_id, api_key=api_key):
                     try:
                         result = await self.memory_manager.add_message(
                             messages=msgs,
                             user_id=user_id,
-                            conversation_id=conv_id
+                            conversation_id=conv_id,
+                            api_key=api_key
                         )
                         if result.get("success"):
                             logger.info(f"成功直接保存1轮对话到MemOS，user_id: {user_id}")
@@ -526,7 +572,7 @@ class MemosIntegratorPlugin(Star):
                     except Exception as e:
                         logger.error(f"直接保存记忆时出错: {e}")
 
-                task = asyncio.create_task(_save_memory_task_direct(messages_to_upload, user_id, conversation_id))
+                task = asyncio.create_task(_save_memory_task_direct(messages_to_upload, user_id, conversation_id, api_key))
                 task.add_done_callback(lambda t: t.exception() and logger.error(f"直接保存任务异常: {t.exception()}", exc_info=True))
             else:
                 # 将当前轮次的对话保存到数据库
@@ -554,14 +600,15 @@ class MemosIntegratorPlugin(Star):
                     # 未达到上传阈值，不执行上传
                     return
 
-                async def _save_memory_task(msgs, user_id, conv_id):
+                async def _save_memory_task(msgs, user_id, conv_id, api_key=api_key):
                     """后台批量保存任务"""
                     try:
                         # 直接调用 add_message，它支持 messages 列表参数
                         result = await self.memory_manager.add_message(
                             messages=msgs,
                             user_id=user_id,
-                            conversation_id=conv_id
+                            conversation_id=conv_id,
+                            api_key=api_key
                         )
                         if result.get("success"):
                             logger.info(f"成功批量保存 {len(msgs)//2} 轮对话到MemOS，user_id: {user_id}")
@@ -571,7 +618,7 @@ class MemosIntegratorPlugin(Star):
                         logger.error(f"批量保存记忆时出错: {e}")
 
                 # 提交后台任务
-                task = asyncio.create_task(_save_memory_task(messages_to_upload, user_id, conversation_id))
+                task = asyncio.create_task(_save_memory_task(messages_to_upload, user_id, conversation_id, api_key))
                 
                 def task_done_callback(t: asyncio.Task):
                     try:

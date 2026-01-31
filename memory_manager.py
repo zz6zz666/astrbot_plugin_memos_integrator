@@ -5,7 +5,7 @@ MemOS记忆管理器
 """
 
 import time
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .memory_templates import MemoryTemplates
 
 from astrbot.api import logger
@@ -26,20 +26,22 @@ class MemoryManager:
         self.base_url = base_url.rstrip('/')
         logger.info(f"MemoryManager初始化完成, API地址: {self.base_url}")
 
-    async def _make_request(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _make_request(self, endpoint: str, data: Dict[str, Any], api_key: Optional[str] = None) -> Dict[str, Any]:
         """发送HTTP请求到MemOS API
 
         Args:
             endpoint: API端点 (如 '/add/message')
             data: 请求数据
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             响应数据字典，格式: {"success": bool, "data": API返回的内容}
         """
         url = f"{self.base_url}{endpoint}"
+        key_to_use = api_key if api_key is not None else self.api_key
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Token {self.api_key}"
+            "Authorization": f"Token {key_to_use}"
         }
 
         try:
@@ -78,13 +80,14 @@ class MemoryManager:
             logger.error(f"MemOS API请求异常: {e}")
             return {"success": False, "error": str(e)}
 
-    async def add_message(self, messages: List[Dict[str, str]], user_id: str, conversation_id: str) -> Dict[str, Any]:
+    async def add_message(self, messages: List[Dict[str, str]], user_id: str, conversation_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
         """添加对话消息到MemOS
 
         Args:
             messages: 对话消息列表,格式为[{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
             user_id: 用户ID
             conversation_id: 对话ID
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             操作结果字典
@@ -95,18 +98,19 @@ class MemoryManager:
             "messages": messages
         }
 
-        result = await self._make_request("/add/message", data)
+        result = await self._make_request("/add/message", data, api_key=api_key)
         if result.get("success"):
             logger.info(f"成功添加对话消息,用户ID: {user_id}, 对话ID: {conversation_id}")
         return result
 
-    async def search_memory(self, query: str, user_id: str, conversation_id: str = None) -> Dict[str, Any]:
+    async def search_memory(self, query: str, user_id: str, conversation_id: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
         """搜索相关记忆
 
         Args:
             query: 查询内容
             user_id: 用户ID
             conversation_id: 对话ID（可选）
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             操作结果字典
@@ -118,12 +122,12 @@ class MemoryManager:
         if conversation_id:
             data["conversation_id"] = conversation_id
 
-        result = await self._make_request("/search/memory", data)
+        result = await self._make_request("/search/memory", data, api_key=api_key)
         if result.get("success"):
             logger.info(f"成功搜索到记忆,用户ID: {user_id}")
         return result
 
-    async def save_conversation(self, user_message: str, ai_response: str, user_id: str, conversation_id: str) -> bool:
+    async def save_conversation(self, user_message: str, ai_response: str, user_id: str, conversation_id: str, api_key: Optional[str] = None) -> bool:
         """保存对话到MemOS
 
         Args:
@@ -131,6 +135,7 @@ class MemoryManager:
             ai_response: AI响应
             user_id: 用户ID
             conversation_id: 对话ID
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             保存是否成功
@@ -142,7 +147,8 @@ class MemoryManager:
                     {"role": "assistant", "content": ai_response}
                 ],
                 user_id=user_id,
-                conversation_id=conversation_id
+                conversation_id=conversation_id,
+                api_key=api_key
             )
 
             if result.get("success", False):
@@ -157,7 +163,7 @@ class MemoryManager:
             logger.error(f"保存对话时出错: {e}")
             return False
 
-    async def retrieve_relevant_memories(self, query: str, user_id: str, conversation_id: str, limit: int = 5) -> List[Dict]:
+    async def retrieve_relevant_memories(self, query: str, user_id: str, conversation_id: str, limit: int = 5, api_key: Optional[str] = None) -> List[Dict]:
         """检索相关记忆
 
         Args:
@@ -165,6 +171,7 @@ class MemoryManager:
             user_id: 用户ID
             conversation_id: 对话ID
             limit: 返回的记忆数量限制
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             相关记忆的列表，包含事实记忆和偏好记忆
@@ -172,7 +179,7 @@ class MemoryManager:
         try:
             logger.debug(f"开始检索相关记忆,查询: {query[:50]}..., 用户ID: {user_id}, 对话ID: {conversation_id}")
 
-            result = await self.search_memory(query, user_id, conversation_id)
+            result = await self.search_memory(query, user_id, conversation_id, api_key=api_key)
 
             if result.get("success", False):
                 data = result.get("data", {})
@@ -258,7 +265,7 @@ class MemoryManager:
             logger.error(f"检索相关记忆时出错: {e}", exc_info=True)
             return []
 
-    async def update_memory(self, messages: List[Dict], user_id: str, session_id: str, conversation_id: str) -> bool:
+    async def update_memory(self, messages: List[Dict], user_id: str, session_id: str, conversation_id: str, api_key: Optional[str] = None) -> bool:
         """更新记忆(保存对话到MemOS)
 
         Args:
@@ -266,12 +273,13 @@ class MemoryManager:
             user_id: 用户ID
             session_id: 会话ID(未使用)
             conversation_id: 对话ID
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             更新是否成功
         """
         try:
-            result = await self.add_message(messages=messages, user_id=user_id, conversation_id=conversation_id)
+            result = await self.add_message(messages=messages, user_id=user_id, conversation_id=conversation_id, api_key=api_key)
 
             if result.get("success", False):
                 logger.info(f"记忆更新成功,用户ID: {user_id}, 对话ID: {conversation_id}")
@@ -328,13 +336,14 @@ class MemoryManager:
             logger.error(f"注入记忆到提示时出错: {e}")
             return original_prompt
 
-    async def add_feedback(self, feedback_content: str, user_id: str, conversation_id: str = None) -> Dict[str, Any]:
+    async def add_feedback(self, feedback_content: str, user_id: str, conversation_id: str = None, api_key: Optional[str] = None) -> Dict[str, Any]:
         """添加反馈到消息
 
         Args:
             feedback_content: 反馈内容
             user_id: 用户ID
             conversation_id: 对话ID（可选）
+            api_key: 可选的API密钥，如果提供则使用此密钥，否则使用实例的api_key
 
         Returns:
             操作结果字典
@@ -345,7 +354,7 @@ class MemoryManager:
             "feedback_content": feedback_content
         }
 
-        result = await self._make_request("/add/feedback", data)
+        result = await self._make_request("/add/feedback", data, api_key=api_key)
         if result.get("success"):
             logger.info(f"成功添加反馈,用户ID: {user_id}, 对话ID: {conversation_id}, 反馈内容: {feedback_content[:50]}...")
         return result

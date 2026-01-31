@@ -4,12 +4,15 @@
 
 import json
 import shutil
+import base64
+import time
+import uuid
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
 from astrbot.api import logger
 
-from .data_models import BotConfig, SessionConfig
+from .data_models import BotConfig, SessionConfig, ApiKeyInfo
 from .data_fetcher import DataFetcher
 
 
@@ -38,7 +41,8 @@ class ConfigManager:
             # 创建默认配置
             default_config = {
                 "version": "1.0",
-                "bots": {}
+                "bots": {},
+                "api_keys": {}  # 新增API密钥存储
             }
             self._save_config(default_config)
             # 如果插件实例存在，从数据库初始化配置
@@ -55,6 +59,8 @@ class ConfigManager:
                 config["version"] = "1.0"
             if "bots" not in config:
                 config["bots"] = {}
+            if "api_keys" not in config:
+                config["api_keys"] = {}
 
             return config
         except (json.JSONDecodeError, IOError) as e:
@@ -66,7 +72,8 @@ class ConfigManager:
 
             default_config = {
                 "version": "1.0",
-                "bots": {}
+                "bots": {},
+                "api_keys": {}  # 新增API密钥存储
             }
             self._save_config(default_config)
             return default_config
@@ -125,7 +132,8 @@ class ConfigManager:
         return BotConfig(
             custom_user_id=bot_data.get("custom_user_id", ""),
             memory_injection_enabled=bot_data.get("memory_injection_enabled", True),
-            new_session_upload_enabled=bot_data.get("new_session_upload_enabled", True)
+            new_session_upload_enabled=bot_data.get("new_session_upload_enabled", True),
+            api_key_selection=bot_data.get("api_key_selection", "default")
         )
 
     def get_session_config(self, bot_id: str, session_id: str) -> SessionConfig:
@@ -139,7 +147,8 @@ class ConfigManager:
         return SessionConfig(
             custom_user_id=session_data.get("custom_user_id", ""),
             memory_injection_enabled=session_data.get("memory_injection_enabled", True),
-            new_session_upload_enabled=session_data.get("new_session_upload_enabled", True)
+            new_session_upload_enabled=session_data.get("new_session_upload_enabled", True),
+            api_key_selection=session_data.get("api_key_selection", "default")
         )
 
     def get_effective_config(self, bot_id: str, session_id: Optional[str] = None) -> BotConfig:
@@ -169,6 +178,9 @@ class ConfigManager:
             effective_config.memory_injection_enabled = session_config.memory_injection_enabled
             effective_config.new_session_upload_enabled = session_config.new_session_upload_enabled
 
+            # API密钥选择直接覆盖
+            effective_config.api_key_selection = session_config.api_key_selection
+
             return effective_config
         else:
             return bot_config
@@ -183,6 +195,13 @@ class ConfigManager:
             if config.custom_user_id and not self._validate_user_id(config.custom_user_id):
                 return False
 
+            # 验证API密钥选择的有效性
+            if config.api_key_selection:
+                api_keys = self.config_data.get("api_keys", {})
+                if config.api_key_selection not in api_keys:
+                    logger.error(f"API密钥选择 '{config.api_key_selection}' 不存在")
+                    return False
+
             # 更新配置数据
             if bot_id not in self.config_data["bots"]:
                 self.config_data["bots"][bot_id] = {
@@ -192,7 +211,8 @@ class ConfigManager:
             self.config_data["bots"][bot_id].update({
                 "custom_user_id": config.custom_user_id,
                 "memory_injection_enabled": config.memory_injection_enabled,
-                "new_session_upload_enabled": config.new_session_upload_enabled
+                "new_session_upload_enabled": config.new_session_upload_enabled,
+                "api_key_selection": config.api_key_selection
             })
 
             # 保存到文件
@@ -213,6 +233,13 @@ class ConfigManager:
             if config.custom_user_id and not self._validate_user_id(config.custom_user_id):
                 return False
 
+            # 验证API密钥选择的有效性
+            if config.api_key_selection:
+                api_keys = self.config_data.get("api_keys", {})
+                if config.api_key_selection not in api_keys:
+                    logger.error(f"API密钥选择 '{config.api_key_selection}' 不存在")
+                    return False
+
             # 确保Bot配置存在
             if bot_id not in self.config_data["bots"]:
                 self.config_data["bots"][bot_id] = {
@@ -227,7 +254,8 @@ class ConfigManager:
             self.config_data["bots"][bot_id]["conversations"][session_id] = {
                 "custom_user_id": config.custom_user_id,
                 "memory_injection_enabled": config.memory_injection_enabled,
-                "new_session_upload_enabled": config.new_session_upload_enabled
+                "new_session_upload_enabled": config.new_session_upload_enabled,
+                "api_key_selection": config.api_key_selection
             }
 
             # 保存到文件
@@ -299,6 +327,7 @@ class ConfigManager:
                         "custom_user_id": "",
                         "memory_injection_enabled": True,
                         "new_session_upload_enabled": True,
+                        "api_key_selection": "default",  # 默认API密钥选择
                         "name": bot.name,
                         "type": bot.type,
                         "conversations": {}
@@ -372,6 +401,7 @@ class ConfigManager:
                 "custom_user_id": "",
                 "memory_injection_enabled": True,
                 "new_session_upload_enabled": True,
+                "api_key_selection": "default",  # 默认API密钥选择
                 "name": bot_id,  # 默认名称
                 "type": "unknown",
                 "conversations": {}
@@ -389,6 +419,7 @@ class ConfigManager:
                 "custom_user_id": "",  # 会话的custom_user_id在创建时始终保持空
                 "memory_injection_enabled": bot_config.memory_injection_enabled,
                 "new_session_upload_enabled": bot_config.new_session_upload_enabled,
+                "api_key_selection": bot_config.api_key_selection,  # 复制API密钥选择
                 "unified_msg_origin": unified_msg_origin
             }
             self._save_config(self.config_data)
@@ -432,6 +463,270 @@ class ConfigManager:
                 return False
 
         return True
+
+    # ==================== API密钥管理方法 ====================
+
+    def encrypt_key_value(self, value: str) -> str:
+        """加密存储：base64编码 + 固定盐混淆"""
+        salt = "MEMOS_PLUGIN_SALT_2026"
+        encoded = base64.b64encode(f"{salt}:{value}".encode()).decode()
+        return encoded
+
+    def decrypt_key_value(self, encrypted: str) -> str:
+        """解密存储的密钥值"""
+        try:
+            decoded = base64.b64decode(encrypted.encode()).decode()
+            if decoded.startswith("MEMOS_PLUGIN_SALT_2026:"):
+                return decoded.split(":", 1)[1]
+            return decoded
+        except:
+            return encrypted  # 兼容未加密的旧数据
+
+    def get_api_keys(self) -> List[ApiKeyInfo]:
+        """获取API密钥列表（不返回实际密钥值）"""
+        self._reload_config_if_needed()
+        api_keys = self.config_data.get("api_keys", {})
+
+        result = []
+        for key_id, key_data in api_keys.items():
+            result.append(ApiKeyInfo(
+                id=key_id,
+                name=key_data.get("name", "未知密钥"),
+                source=key_data.get("source", "user_defined"),
+                created_at=key_data.get("created_at", ""),
+                is_default=key_data.get("is_default", False)
+            ))
+
+        return result
+
+    def get_api_key_value(self, key_id: str) -> Optional[str]:
+        """获取解密后的密钥值（供MemoryManager使用）"""
+        self._reload_config_if_needed()
+        api_keys = self.config_data.get("api_keys", {})
+
+        if key_id not in api_keys:
+            return None
+
+        encrypted_value = api_keys[key_id].get("value", "")
+        if not encrypted_value:
+            return None
+
+        return self.decrypt_key_value(encrypted_value)
+
+    def add_api_key(self, name: str, value: str) -> Optional[str]:
+        """添加新API密钥
+
+        Args:
+            name: 密钥名称
+            value: base64编码的原始密钥值
+
+        Returns:
+            生成的密钥ID，失败返回None
+        """
+        self._reload_config_if_needed()
+
+        # 验证名称唯一性
+        api_keys = self.config_data.get("api_keys", {})
+        for key_id, key_data in api_keys.items():
+            if key_data.get("name") == name:
+                logger.error(f"密钥名称 '{name}' 已存在")
+                return None
+
+        # 生成唯一ID
+        key_id = f"custom_{uuid.uuid4().hex[:8]}"
+
+        # 加密存储
+        encrypted_value = self.encrypt_key_value(value)
+
+        # 添加到配置
+        api_keys[key_id] = {
+            "name": name,
+            "value": encrypted_value,
+            "source": "user_defined",
+            "created_at": datetime.now().isoformat(),
+            "is_default": False
+        }
+
+        self.config_data["api_keys"] = api_keys
+        self._save_config(self.config_data)
+
+        logger.info(f"已添加API密钥: {name} ({key_id})")
+        return key_id
+
+    def delete_api_key(self, key_id: str) -> bool:
+        """删除自定义API密钥
+
+        Args:
+            key_id: 密钥ID
+
+        Returns:
+            是否成功删除
+        """
+        self._reload_config_if_needed()
+
+        api_keys = self.config_data.get("api_keys", {})
+
+        # 检查密钥是否存在
+        if key_id not in api_keys:
+            logger.error(f"密钥ID '{key_id}' 不存在")
+            return False
+
+        # 检查是否为默认密钥（不可删除）
+        if api_keys[key_id].get("is_default", False):
+            logger.error("无法删除默认密钥")
+            return False
+
+        # 检查密钥是否正在被使用，如果被使用则自动切换为default
+        updated_bots = []
+        updated_sessions = []
+
+        for bot_id, bot_data in self.config_data.get("bots", {}).items():
+            # 检查Bot配置
+            if bot_data.get("api_key_selection") == key_id:
+                bot_data["api_key_selection"] = "default"
+                updated_bots.append(bot_id)
+
+            # 检查会话配置
+            conversations = bot_data.get("conversations", {})
+            for session_id, session_data in conversations.items():
+                if session_data.get("api_key_selection") == key_id:
+                    session_data["api_key_selection"] = "default"
+                    updated_sessions.append(f"{bot_id}/{session_id}")
+
+        # 如果有配置被更新，记录日志
+        if updated_bots or updated_sessions:
+            logger.info(f"删除密钥前已自动更新配置: {len(updated_bots)}个Bot, {len(updated_sessions)}个会话")
+
+        # 删除密钥
+        del api_keys[key_id]
+        self.config_data["api_keys"] = api_keys
+        self._save_config(self.config_data)
+
+        logger.info(f"已删除API密钥: {key_id}")
+        return True
+
+    def update_api_key(self, key_id: str, name: Optional[str] = None, value: Optional[str] = None) -> bool:
+        """更新API密钥信息
+
+        Args:
+            key_id: 密钥ID
+            name: 新名称（可选）
+            value: base64编码的新密钥值（可选）
+
+        Returns:
+            是否成功更新
+        """
+        self._reload_config_if_needed()
+
+        api_keys = self.config_data.get("api_keys", {})
+
+        if key_id not in api_keys:
+            logger.error(f"密钥ID '{key_id}' 不存在")
+            return False
+
+        # 更新名称（如果提供了新名称）
+        if name is not None:
+            # 检查是否为默认密钥，默认密钥名称不能修改
+            if api_keys[key_id].get("is_default", False):
+                logger.error("默认密钥名称不能修改")
+                return False
+
+            # 检查名称唯一性（排除自身）
+            for existing_id, existing_data in api_keys.items():
+                if existing_id != key_id and existing_data.get("name") == name:
+                    logger.error(f"密钥名称 '{name}' 已存在")
+                    return False
+            api_keys[key_id]["name"] = name
+
+        # 更新密钥值（如果提供了新值）
+        if value is not None:
+            encrypted_value = self.encrypt_key_value(value)
+            api_keys[key_id]["value"] = encrypted_value
+
+        self.config_data["api_keys"] = api_keys
+        self._save_config(self.config_data)
+
+        logger.info(f"已更新API密钥: {key_id}")
+        return True
+
+    def ensure_default_key_exists(self, default_key_value: str) -> bool:
+        """确保默认密钥存在
+
+        Args:
+            default_key_value: 默认密钥的原始值
+
+        Returns:
+            是否成功确保默认密钥存在
+        """
+        self._reload_config_if_needed()
+
+        api_keys = self.config_data.get("api_keys", {})
+
+        # 直接设置默认密钥，不考虑任何历史数据
+        api_keys["default"] = {
+            "name": "default",
+            "value": self.encrypt_key_value(default_key_value),
+            "source": "plugin_config",
+            "created_at": datetime.now().isoformat(),
+            "is_default": True
+        }
+
+        self.config_data["api_keys"] = api_keys
+        self._save_config(self.config_data)
+        logger.info("默认密钥已确保存在")
+
+        return True
+
+    def apply_api_key_to_all_sessions(self, bot_id: str, key_id: str) -> Dict[str, Any]:
+        """将API密钥选择应用到所有会话
+
+        Args:
+            bot_id: Bot ID
+            key_id: 要应用的密钥ID
+
+        Returns:
+            包含统计信息的字典: total, updated, failed
+        """
+        self._reload_config_if_needed()
+
+        if bot_id not in self.config_data["bots"]:
+            return {"total": 0, "updated": 0, "failed": []}
+
+        # 验证密钥ID是否存在
+        api_keys = self.config_data.get("api_keys", {})
+        if key_id not in api_keys:
+            logger.error(f"密钥ID '{key_id}' 不存在")
+            return {"total": 0, "updated": 0, "failed": []}
+
+        sessions = self.config_data["bots"][bot_id].get("conversations", {})
+        total = len(sessions)
+        updated = 0
+        failed = []
+
+        for session_id in sessions.keys():
+            try:
+                # 获取当前会话配置
+                session_config = self.get_session_config(bot_id, session_id)
+
+                # 更新API密钥选择
+                session_config.api_key_selection = key_id
+
+                # 保存更新后的配置
+                if self.save_session_config(bot_id, session_id, session_config):
+                    updated += 1
+                else:
+                    failed.append(session_id)
+            except Exception as e:
+                logger.error(f"更新会话 {session_id} API密钥选择失败: {e}")
+                failed.append(session_id)
+
+        return {"total": total, "updated": updated, "failed": failed}
+
+    def get_available_key_ids(self) -> List[str]:
+        """获取所有可用的密钥ID列表"""
+        self._reload_config_if_needed()
+        api_keys = self.config_data.get("api_keys", {})
+        return list(api_keys.keys())
 
     def apply_switch_to_all_sessions(self, bot_id: str, switch_type: str, enabled: bool) -> Dict[str, Any]:
         """将指定开关状态应用到所有会话

@@ -1102,6 +1102,330 @@ input:checked + .toggle-label:before {
     }
 }
 
+/* 密钥管理区域样式 */
+.key-management-content {
+    padding: 1rem;
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    margin-top: 0.5rem;
+    border: 1px solid var(--border-color);
+}
+
+/* 密钥列表 */
+.key-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.key-item {
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    transition: var(--transition);
+}
+
+.key-item:hover {
+    background-color: var(--hover-bg);
+    border-color: var(--primary-color);
+}
+
+.key-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.key-item-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.key-item-info i {
+    color: var(--primary-color);
+    font-size: 1.25rem;
+}
+
+.key-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.key-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.key-source {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    background-color: var(--hover-bg);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.key-time {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.key-item-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* 密钥选择容器 */
+.key-selection-container {
+    margin-bottom: 0.5rem;
+}
+
+.key-select-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.key-select {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.875rem;
+    transition: var(--transition);
+}
+
+.key-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+}
+
+/* 密钥表单 */
+.add-key-form textarea,
+#edit-key-value {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.8rem;
+    resize: vertical;
+    transition: var(--transition);
+}
+
+.add-key-form textarea:focus,
+#edit-key-value:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(67, 97, 238, 0.2);
+}
+
+/* 编辑对话框 */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+}
+
+.modal-dialog {
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    width: 90%;
+    max-width: 500px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 1.5rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-body {
+    padding: 1rem 1.5rem;
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+/* Toast通知 */
+.toast-notification {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 1rem 1.5rem;
+    box-shadow: var(--shadow);
+    z-index: 3000;
+    animation: slideIn 0.3s ease;
+    max-width: 400px;
+}
+
+.toast-content {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.toast-success {
+    border-left: 4px solid var(--success-color);
+}
+
+.toast-error {
+    border-left: 4px solid var(--danger-color);
+}
+
+.toast-info {
+    border-left: 4px solid var(--info-color);
+}
+
+.toast-content i {
+    font-size: 1.25rem;
+}
+
+.toast-success .toast-content i {
+    color: var(--success-color);
+}
+
+.toast-error .toast-content i {
+    color: var(--danger-color);
+}
+
+.toast-info .toast-content i {
+    color: var(--info-color);
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+}
+
+.empty-state i {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* 响应式布局 - 宽屏 (>1024px) */
+@media (min-width: 1024px) {
+    .key-select-row {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .key-select-row .key-select {
+        flex: 1;
+    }
+
+    .key-select-row #apply-api-key-to-all {
+        flex-shrink: 0;
+    }
+}
+
+/* 响应式布局 - 中屏 (768px-1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .key-select-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .key-select-row .key-select {
+        width: 100%;
+    }
+
+    .key-select-row #apply-api-key-to-all {
+        width: 100%;
+    }
+}
+
+/* 响应式布局 - 窄屏 (<768px，手机移动端) */
+@media (max-width: 768px) {
+    .key-select-row {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .key-select-row .key-select {
+        flex: 1;
+    }
+
+    .key-select-row #apply-api-key-to-all {
+        flex-shrink: 0;
+        padding: 0.5rem;
+    }
+
+    .key-select-row #apply-api-key-to-all i {
+        margin: 0;
+    }
+
+    .key-select-row #apply-api-key-to-all span {
+        display: none;
+    }
+
+    /* 调整密钥管理区域在移动端的显示 */
+    .key-management-content {
+        padding: 0.75rem;
+    }
+
+    .key-item {
+        padding: 0.5rem;
+    }
+
+    .key-item-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .key-item-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+}
+
 /* 工具类 */
 .hidden {
     display: none !important;

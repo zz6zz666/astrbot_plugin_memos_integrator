@@ -17,7 +17,8 @@ from .data_models import (
     LoginRequest, LoginResponse, BotInfo, SessionInfo,
     BotTreeItem, ConfigTreeResponse, SaveConfigRequest,
     SaveConfigResponse, HealthResponse, BotConfig,
-    ApplySwitchRequest, ApplySwitchResponse
+    ApplySwitchRequest, ApplySwitchResponse,
+    ApiKeyInfo, ApiKeyListResponse, CreateApiKeyRequest, UpdateApiKeyRequest
 )
 from .config_manager import ConfigManager
 from .data_fetcher import DataFetcher
@@ -153,7 +154,166 @@ def create_app(plugin_instance):
         for item in bot_tree:
             item.config = config_manager.get_bot_config(item.bot.id)
 
-        return ConfigTreeResponse(bots=bot_tree)
+        # 获取可用API密钥列表
+        available_keys = config_manager.get_api_keys()
+
+        return ConfigTreeResponse(bots=bot_tree, available_keys=available_keys)
+
+    # ==================== API密钥管理端点 ====================
+
+    @app.get("/api/keys", response_model=ApiKeyListResponse)
+    async def get_api_keys(
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """获取API密钥列表（不包含实际密钥值）"""
+        keys = config_manager.get_api_keys()
+        return ApiKeyListResponse(keys=keys)
+
+    @app.post("/api/keys", response_model=dict)
+    async def create_api_key(
+        request_data: CreateApiKeyRequest,
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """创建新的API密钥"""
+        try:
+            # 验证base64编码
+            import base64
+            try:
+                # 尝试解码验证
+                base64.b64decode(request_data.value)
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="密钥值必须是有效的base64编码"
+                )
+
+            key_id = config_manager.add_api_key(request_data.name, request_data.value)
+            if not key_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="密钥创建失败，可能是名称已存在"
+                )
+
+            return {"success": True, "key_id": key_id, "message": "密钥创建成功"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"密钥创建失败: {str(e)}"
+            )
+
+    @app.put("/api/keys/{key_id}", response_model=dict)
+    async def update_api_key(
+        key_id: str,
+        request_data: UpdateApiKeyRequest,
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """更新API密钥信息"""
+        try:
+            # 验证base64编码（如果提供了新值）
+            if request_data.value is not None:
+                import base64
+                try:
+                    base64.b64decode(request_data.value)
+                except Exception:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="密钥值必须是有效的base64编码"
+                    )
+
+            success = config_manager.update_api_key(
+                key_id,
+                name=request_data.name,
+                value=request_data.value
+            )
+            if not success:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="密钥更新失败，可能是名称已存在或密钥不存在"
+                )
+
+            return {"success": True, "message": "密钥更新成功"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"密钥更新失败: {str(e)}"
+            )
+
+    @app.delete("/api/keys/{key_id}", response_model=dict)
+    async def delete_api_key(
+        key_id: str,
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """删除API密钥"""
+        try:
+            success = config_manager.delete_api_key(key_id)
+            if not success:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="密钥删除失败，可能是密钥不存在或是默认密钥"
+                )
+
+            return {"success": True, "message": "密钥删除成功"}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"密钥删除失败: {str(e)}"
+            )
+
+    @app.post("/api/config/{bot_id}/apply-key-to-all", response_model=ApplySwitchResponse)
+    async def apply_api_key_to_all(
+        bot_id: str,
+        request_data: ApplySwitchRequest,  # 复用ApplySwitchRequest，使用value字段存储密钥ID
+        current_user: dict = Depends(get_current_user_dependency)
+    ):
+        """将API密钥选择应用到所有会话"""
+        try:
+            if request_data.switch_type != "api_key_selection":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="无效的开关类型"
+                )
+
+            if not request_data.value:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="必须提供密钥ID"
+                )
+
+            result = config_manager.apply_api_key_to_all_sessions(bot_id, request_data.value)
+
+            success = result["updated"] == result["total"]
+            if success:
+                message = f"成功更新 {result['updated']}/{result['total']} 个会话"
+            else:
+                # 只显示前5个失败的会话ID，避免消息过长
+                failed_preview = ", ".join(result["failed"][:5])
+                if len(result["failed"]) > 5:
+                    failed_preview += f" 等{len(result['failed'])}个"
+                message = f"部分更新成功：{result['updated']}/{result['total']} 个会话，失败：{failed_preview}"
+
+            return ApplySwitchResponse(
+                success=success,
+                total_sessions=result["total"],
+                updated_sessions=result["updated"],
+                failed_sessions=result["failed"],
+                message=message
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            return ApplySwitchResponse(
+                success=False,
+                total_sessions=0,
+                updated_sessions=0,
+                failed_sessions=[],
+                message=f"应用API密钥失败: {str(e)}"
+            )
 
     @app.get("/api/config/{bot_id}", response_model=BotConfig)
     async def get_bot_config(
@@ -190,9 +350,19 @@ def create_app(plugin_instance):
     ):
         """将开关状态应用到所有会话"""
         try:
-            result = config_manager.apply_switch_to_all_sessions(
-                bot_id, request_data.switch_type, request_data.enabled
-            )
+            if request_data.switch_type == "api_key_selection":
+                # API密钥选择应用到全部
+                if not request_data.value:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="API密钥选择必须提供密钥ID"
+                    )
+                result = config_manager.apply_api_key_to_all_sessions(bot_id, request_data.value)
+            else:
+                # 原有的布尔开关应用到全部
+                result = config_manager.apply_switch_to_all_sessions(
+                    bot_id, request_data.switch_type, request_data.enabled
+                )
 
             success = result["updated"] == result["total"]
             if success:
@@ -211,6 +381,8 @@ def create_app(plugin_instance):
                 failed_sessions=result["failed"],
                 message=message
             )
+        except HTTPException:
+            raise
         except Exception as e:
             return ApplySwitchResponse(
                 success=False,

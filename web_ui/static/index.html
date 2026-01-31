@@ -96,6 +96,38 @@
                         <div class="memos-key-management">
                             <div class="sidebar-title">
                                 <h3><i class="fas fa-key"></i> MemOS 密钥管理</h3>
+                                <button id="key-management-toggle" class="btn-icon">
+                                    <i class="fas fa-chevron-down"></i>
+                                </button>
+                            </div>
+                            <div class="key-management-content" style="display: none;">
+                                <!-- 密钥列表 -->
+                                <div id="api-keys-list" class="key-list">
+                                    <div class="loading-state">
+                                        <i class="fas fa-spinner fa-spin"></i>
+                                        <p>加载密钥列表中...</p>
+                                    </div>
+                                </div>
+
+                                <!-- 添加密钥表单 -->
+                                <div class="add-key-form" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                                    <h4><i class="fas fa-plus-circle"></i> 添加新密钥</h4>
+                                    <div class="form-group">
+                                        <label for="new-key-name">密钥名称</label>
+                                        <input type="text" id="new-key-name" placeholder="输入密钥名称" maxlength="50">
+                                        <div class="form-hint">密钥名称必须唯一，最多50个字符</div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="new-key-value">MemOS API密钥</label>
+                                        <textarea id="new-key-value" rows="3" placeholder="粘贴MemOS API密钥"></textarea>
+                                        <div class="form-hint">密钥值将进行加密存储，请确保输入正确的API密钥</div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button id="add-key-btn" class="btn btn-small btn-primary">
+                                            <i class="fas fa-plus"></i> 添加密钥
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -141,6 +173,26 @@
                                                    placeholder="留空则使用默认生成规则 (bot名称:会话类型:会话ID)">
                                             <div class="form-hint">
                                                 替代默认的用户ID生成方式，用于MemOS API请求
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group desktop-horizontal-item">
+                                            <label for="bot-api-key-selection">
+                                                <i class="fas fa-key"></i> MemOS API密钥
+                                            </label>
+                                            <div class="key-selection-container">
+                                                <div class="key-select-row">
+                                                    <select id="bot-api-key-selection" class="key-select">
+                                                        <option value="default">default</option>
+                                                        <!-- 密钥选项将通过JavaScript动态加载 -->
+                                                    </select>
+                                                    <button id="apply-api-key-to-all" class="btn btn-small btn-secondary">
+                                                        <i class="fas fa-sync-alt"></i> 应用到全部会话
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="form-hint">
+                                                选择用于此Bot的MemOS API密钥
                                             </div>
                                         </div>
 
@@ -250,6 +302,21 @@
                                         </div>
 
                                         <div class="form-group">
+                                            <label for="session-api-key-selection-{id}">
+                                                <i class="fas fa-key"></i> MemOS API密钥
+                                            </label>
+                                            <div class="key-selection-container">
+                                                <select class="session-api-key-selection" data-session-id="{id}">
+                                                    <option value="default">默认密钥</option>
+                                                    <!-- 密钥选项将通过JavaScript动态加载 -->
+                                                </select>
+                                            </div>
+                                            <div class="form-hint">
+                                                优先级：会话配置 > Bot配置
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group">
                                             <label>
                                                 <i class="fas fa-memory"></i> 记忆注入开关
                                             </label>
@@ -325,5 +392,57 @@
 
     <!-- JavaScript文件 -->
     <script src="/static/app.js"></script>
+
+    <!-- 密钥项模板 (隐藏) -->
+    <template id="key-item-template">
+        <div class="key-item" data-key-id="{id}">
+            <div class="key-item-header">
+                <div class="key-item-info">
+                    <i class="fas fa-key"></i>
+                    <div class="key-item-details">
+                        <span class="key-name">{name}</span>
+                        <span class="key-source">{source}</span>
+                        <span class="key-time">创建于: {created_at}</span>
+                    </div>
+                </div>
+                <div class="key-item-actions">
+                    <button class="btn-icon btn-edit-key" title="编辑密钥">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn-icon btn-delete-key" title="删除密钥">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- 密钥编辑对话框模板 -->
+    <template id="key-edit-dialog-template">
+        <div class="modal-overlay" id="key-edit-overlay" style="display: none;">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h3><i class="fas fa-edit"></i> 编辑API密钥</h3>
+                    <button class="btn-icon btn-close-modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-key-name">密钥名称</label>
+                        <input type="text" id="edit-key-name" placeholder="输入密钥名称" maxlength="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-key-value">MemOS API密钥（留空则不更改）</label>
+                        <textarea id="edit-key-value" rows="3" placeholder="输入新密钥值（留空则保持原值）"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary btn-cancel-edit">取消</button>
+                    <button class="btn btn-primary btn-save-edit">保存更改</button>
+                </div>
+            </div>
+        </div>
+    </template>
 </body>
 </html>

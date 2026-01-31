@@ -12,6 +12,11 @@ class MemOSWebUI {
         this.unsavedChanges = false;
         this.applyingToAllInProgress = false;
 
+        // 新增密钥管理相关属性
+        this.apiKeys = [];  // 存储密钥列表
+        this.currentEditingKeyId = null;  // 当前正在编辑的密钥ID
+        this.keyManagementExpanded = false;  // 密钥管理区域是否展开
+
         // 初始化事件监听
         this.initEventListeners();
 
@@ -64,6 +69,23 @@ class MemOSWebUI {
         document.getElementById('bot-custom-user-id')?.addEventListener('input', () => this.markUnsaved());
         document.getElementById('bot-memory-injection')?.addEventListener('change', () => this.markUnsaved());
         document.getElementById('bot-new-session-upload')?.addEventListener('change', () => this.markUnsaved());
+
+        // 密钥管理相关
+        document.getElementById('key-management-toggle')?.addEventListener('click', () => this.toggleKeyManagement());
+        document.getElementById('add-key-btn')?.addEventListener('click', async () => await this.handleAddKey());
+        document.getElementById('apply-api-key-to-all')?.addEventListener('click', async () => await this.applyApiKeyToAll());
+
+        // Bot配置输入监听
+        document.getElementById('bot-api-key-selection')?.addEventListener('change', () => this.markUnsaved());
+
+        // 会话配置输入监听（动态添加）
+
+        // 密钥编辑/删除按钮（动态添加）
+
+        // 编辑对话框事件
+        document.querySelector('.btn-close-modal')?.addEventListener('click', () => this.hideKeyEditDialog());
+        document.querySelector('.btn-cancel-edit')?.addEventListener('click', () => this.hideKeyEditDialog());
+        document.querySelector('.btn-save-edit')?.addEventListener('click', async () => await this.handleSaveKeyEdit());
 
         // 窗口事件
         window.addEventListener('beforeunload', (e) => {
@@ -417,37 +439,24 @@ class MemOSWebUI {
 
     // 加载Bot列表
     async loadBots() {
-        const botListElement = document.getElementById('bot-list');
-        if (!botListElement) return;
-
-        botListElement.innerHTML = `
-            <div class="loading-state">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>加载Bot列表中...</p>
-            </div>
-        `;
-
         try {
-            const bots = await this.apiRequest('/api/bots');
-            this.renderBotList(bots);
+            const response = await this.apiRequest('/api/config/tree');
+            this.bots = response.bots || [];
+            this.apiKeys = response.available_keys || []; // 获取密钥列表
+            this.renderBotList();
+            this.updateKeySelectionOptions(); // 更新密钥选择选项
         } catch (error) {
             console.error('加载Bot列表失败:', error);
-            botListElement.innerHTML = `
-                <div class="error-message">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>加载失败: ${error.message}</p>
-                    <button class="btn btn-small" onclick="window.ui.loadBots()">重试</button>
-                </div>
-            `;
+            this.showToast('加载Bot列表失败', 'error');
         }
     }
 
     // 渲染Bot列表
-    renderBotList(bots) {
+    renderBotList() {
         const botListElement = document.getElementById('bot-list');
         if (!botListElement) return;
 
-        if (bots.length === 0) {
+        if (this.bots.length === 0) {
             botListElement.innerHTML = `
                 <div class="empty-state">
                     <i class="fas fa-robot"></i>
@@ -458,7 +467,8 @@ class MemOSWebUI {
         }
 
         let html = '';
-        bots.forEach(bot => {
+        this.bots.forEach(botItem => {
+            const bot = botItem.bot;
             html += `
                 <div class="bot-item" data-bot-id="${bot.id}" data-bot-name="${this.escapeHtml(bot.name)}">
                     <div class="bot-icon">
@@ -473,7 +483,7 @@ class MemOSWebUI {
         });
 
         botListElement.innerHTML = html;
-        
+
         // Attach click event listeners programmatically instead of inline handlers
         document.querySelectorAll('.bot-item').forEach(item => {
             item.addEventListener('click', async () => {
@@ -492,8 +502,8 @@ class MemOSWebUI {
         });
 
         // 首次加载时自动选择第一个Bot
-        if (!this.currentBotId && bots.length > 0) {
-            const firstBot = bots[0];
+        if (!this.currentBotId && this.bots.length > 0) {
+            const firstBot = this.bots[0].bot;
             this.selectBot(firstBot.id, firstBot.name);
         }
     }
@@ -541,7 +551,8 @@ class MemOSWebUI {
             this.botConfigs[botId] = {
                 custom_user_id: '',
                 memory_injection_enabled: true,
-                new_session_upload_enabled: true
+                new_session_upload_enabled: true,
+                api_key_selection: 'default'
             };
             this.renderBotConfig(botId, this.botConfigs[botId]);
         }
@@ -552,6 +563,12 @@ class MemOSWebUI {
         document.getElementById('bot-custom-user-id').value = config.custom_user_id || '';
         document.getElementById('bot-memory-injection').checked = config.memory_injection_enabled;
         document.getElementById('bot-new-session-upload').checked = config.new_session_upload_enabled;
+
+        // 新增：API密钥选择
+        const keySelect = document.getElementById('bot-api-key-selection');
+        if (keySelect) {
+            keySelect.value = config.api_key_selection || 'default';
+        }
 
         this.unsavedChanges = false;
     }
@@ -678,6 +695,21 @@ class MemOSWebUI {
                                 </div>
                             </div>
 
+                            <div class="form-group">
+                                <label for="session-api-key-selection-${sessionId}">
+                                    <i class="fas fa-key"></i> MemOS API密钥
+                                </label>
+                                <div class="key-selection-container">
+                                    <select class="session-api-key-selection" data-session-id="${sessionId}">
+                                        <option value="default">default</option>
+                                        <!-- 密钥选项将通过JavaScript动态加载 -->
+                                    </select>
+                                </div>
+                                <div class="form-hint">
+                                    优先级：会话配置 > Bot配置
+                                </div>
+                            </div>
+
                             <div class="form-actions">
                                 <button class="btn btn-small" onclick="window.ui.saveSessionConfig('${botId}', '${sessionId}')">
                                     <i class="fas fa-save"></i> 保存此会话
@@ -698,6 +730,9 @@ class MemOSWebUI {
         sessions.forEach(session => {
             this.loadSessionConfig(botId, session.id);
         });
+
+        // 更新密钥选择选项
+        this.updateKeySelectionOptions();
     }
 
     // 加载会话配置
@@ -712,7 +747,8 @@ class MemOSWebUI {
             this.sessionConfigs[`${botId}_${sessionId}`] = {
                 custom_user_id: '',
                 memory_injection_enabled: true,
-                new_session_upload_enabled: true
+                new_session_upload_enabled: true,
+                api_key_selection: 'default'
             };
             this.renderSessionConfig(botId, sessionId, this.sessionConfigs[`${botId}_${sessionId}`]);
         }
@@ -726,6 +762,12 @@ class MemOSWebUI {
         sessionElement.querySelector('.session-custom-user-id').value = config.custom_user_id || '';
         sessionElement.querySelector('.session-memory-injection').checked = config.memory_injection_enabled;
         sessionElement.querySelector('.session-new-session-upload').checked = config.new_session_upload_enabled;
+
+        // 新增：API密钥选择
+        const keySelect = sessionElement.querySelector('.session-api-key-selection');
+        if (keySelect) {
+            keySelect.value = config.api_key_selection || 'default';
+        }
     }
 
     // 切换会话展开/折叠
@@ -829,7 +871,8 @@ class MemOSWebUI {
         const botConfig = {
             custom_user_id: document.getElementById('bot-custom-user-id').value.trim(),
             memory_injection_enabled: document.getElementById('bot-memory-injection').checked,
-            new_session_upload_enabled: document.getElementById('bot-new-session-upload').checked
+            new_session_upload_enabled: document.getElementById('bot-new-session-upload').checked,
+            api_key_selection: document.getElementById('bot-api-key-selection').value
         };
 
         // 验证用户ID格式
@@ -852,7 +895,8 @@ class MemOSWebUI {
                 const sessionConfig = {
                     custom_user_id: element.querySelector('.session-custom-user-id').value.trim(),
                     memory_injection_enabled: element.querySelector('.session-memory-injection').checked,
-                    new_session_upload_enabled: element.querySelector('.session-new-session-upload').checked
+                    new_session_upload_enabled: element.querySelector('.session-new-session-upload').checked,
+                    api_key_selection: element.querySelector(`.session-api-key-selection[data-session-id="${sessionId}"]`).value
                 };
 
                 // 验证会话用户ID
@@ -887,7 +931,8 @@ class MemOSWebUI {
         const botConfig = {
             custom_user_id: document.getElementById('bot-custom-user-id').value.trim(),
             memory_injection_enabled: document.getElementById('bot-memory-injection').checked,
-            new_session_upload_enabled: document.getElementById('bot-new-session-upload').checked
+            new_session_upload_enabled: document.getElementById('bot-new-session-upload').checked,
+            api_key_selection: document.getElementById('bot-api-key-selection').value // 新增
         };
 
         // 验证用户ID格式
@@ -927,7 +972,8 @@ class MemOSWebUI {
         const config = {
             custom_user_id: sessionElement.querySelector('.session-custom-user-id').value.trim(),
             memory_injection_enabled: sessionElement.querySelector('.session-memory-injection').checked,
-            new_session_upload_enabled: sessionElement.querySelector('.session-new-session-upload').checked
+            new_session_upload_enabled: sessionElement.querySelector('.session-new-session-upload').checked,
+            api_key_selection: document.querySelector(`.session-api-key-selection[data-session-id="${sessionId}"]`).value // 新增
         };
 
         // 验证用户ID
@@ -991,7 +1037,8 @@ class MemOSWebUI {
                 const sessionConfig = {
                     custom_user_id: element.querySelector('.session-custom-user-id').value.trim(),
                     memory_injection_enabled: element.querySelector('.session-memory-injection').checked,
-                    new_session_upload_enabled: element.querySelector('.session-new-session-upload').checked
+                    new_session_upload_enabled: element.querySelector('.session-new-session-upload').checked,
+                    api_key_selection: element.querySelector(`.session-api-key-selection[data-session-id="${sessionId}"]`).value
                 };
 
                 // 验证会话用户ID
@@ -1252,6 +1299,369 @@ class MemOSWebUI {
             setTimeout(() => {
                 statusElement.style.display = 'none';
             }, 3000);
+        }
+    }
+
+    // 显示Toast通知
+    showToast(message, type = 'info') {
+        // 移除现有的toast
+        const existingToast = document.querySelector('.toast-notification');
+        if (existingToast) {
+            existingToast.remove();
+        }
+
+        // 创建toast元素
+        const toast = document.createElement('div');
+        toast.className = `toast-notification toast-${type}`;
+        toast.innerHTML = `
+            <div class="toast-content">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+
+        document.body.appendChild(toast);
+
+        // 3秒后自动移除
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.remove();
+            }
+        }, 3000);
+    }
+
+    // 加载API密钥列表
+    async loadApiKeys() {
+        try {
+            const response = await this.apiRequest('/api/keys');
+            this.apiKeys = response.keys || [];
+            this.renderKeyManagement();
+            this.updateKeySelectionOptions();
+        } catch (error) {
+            console.error('加载API密钥列表失败:', error);
+            this.showToast('加载密钥列表失败', 'error');
+        }
+    }
+
+    // 渲染密钥管理UI
+    renderKeyManagement() {
+        const keysList = document.getElementById('api-keys-list');
+        if (!keysList) return;
+
+        if (this.apiKeys.length === 0) {
+            keysList.innerHTML = '<div class="empty-state">暂无自定义密钥，请添加新的API密钥</div>';
+            return;
+        }
+
+        const template = document.getElementById('key-item-template');
+        if (!template) return;
+
+        keysList.innerHTML = '';
+
+        this.apiKeys.forEach(key => {
+            const keyHtml = template.innerHTML
+                .replace(/{id}/g, key.id)
+                .replace(/{name}/g, key.name)
+                .replace(/{source}/g, key.source === 'plugin_config' ? '插件配置' : '用户定义')
+                .replace(/{created_at}/g, new Date(key.created_at).toLocaleString());
+
+            const keyElement = document.createElement('div');
+            keyElement.innerHTML = keyHtml;
+            keysList.appendChild(keyElement.firstElementChild);
+
+            // 添加事件监听
+            const keyItem = keysList.querySelector(`[data-key-id="${key.id}"]`);
+            if (keyItem) {
+                const editBtn = keyItem.querySelector('.btn-edit-key');
+                const deleteBtn = keyItem.querySelector('.btn-delete-key');
+
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => this.showKeyEditDialog(key.id));
+                }
+                if (deleteBtn) {
+                    deleteBtn.addEventListener('click', () => this.handleDeleteKey(key.id, key.name, key.is_default));
+                }
+            }
+        });
+    }
+
+    // 更新密钥选择下拉框选项
+    updateKeySelectionOptions() {
+        const botSelect = document.getElementById('bot-api-key-selection');
+        const sessionSelects = document.querySelectorAll('.session-api-key-selection');
+
+        if (botSelect) {
+            // 保存当前选中的值
+            const currentValue = botSelect.value;
+
+            // 清空现有选项
+            botSelect.innerHTML = '';
+
+            // 添加密钥选项，处理默认密钥
+            this.apiKeys.forEach(key => {
+                const option = document.createElement('option');
+                option.value = key.id;
+                // 使用密钥名称（默认密钥名称应为"default"）
+                option.textContent = key.name;
+                botSelect.appendChild(option);
+            });
+
+            // 如果没有密钥选项，添加默认选项作为后备
+            if (this.apiKeys.length === 0) {
+                const defaultOption = document.createElement('option');
+                defaultOption.value = 'default';
+                defaultOption.textContent = 'default';
+                botSelect.appendChild(defaultOption);
+            }
+
+            // 恢复选中的值（如果仍然存在）
+            if (currentValue && botSelect.querySelector(`option[value="${currentValue}"]`)) {
+                botSelect.value = currentValue;
+            }
+        }
+
+        // 更新所有会话配置的密钥选择框
+        sessionSelects.forEach(select => {
+            const currentValue = select.value;
+            select.innerHTML = '';
+
+            // 添加密钥选项，处理默认密钥
+            this.apiKeys.forEach(key => {
+                const option = document.createElement('option');
+                option.value = key.id;
+                // 使用密钥名称（默认密钥名称应为"default"）
+                option.textContent = key.name;
+                select.appendChild(option);
+            });
+
+            // 如果没有密钥选项，添加默认选项作为后备
+            if (this.apiKeys.length === 0) {
+                const defaultOption = document.createElement('option');
+                defaultOption.value = 'default';
+                defaultOption.textContent = 'default';
+                select.appendChild(defaultOption);
+            }
+
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+        });
+    }
+
+    // 切换密钥管理区域显示/隐藏
+    toggleKeyManagement() {
+        const content = document.querySelector('.key-management-content');
+        const toggleBtn = document.getElementById('key-management-toggle');
+
+        if (!content || !toggleBtn) return;
+
+        this.keyManagementExpanded = !this.keyManagementExpanded;
+
+        if (this.keyManagementExpanded) {
+            content.style.display = 'block';
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
+            // 总是加载密钥列表以确保数据最新
+            this.loadApiKeys();
+        } else {
+            content.style.display = 'none';
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+        }
+    }
+
+    // 添加新密钥
+    async handleAddKey() {
+        const nameInput = document.getElementById('new-key-name');
+        const valueInput = document.getElementById('new-key-value');
+
+        if (!nameInput || !valueInput) return;
+
+        const name = nameInput.value.trim();
+        const value = valueInput.value.trim();
+
+        // 验证输入
+        if (!name) {
+            this.showToast('请输入密钥名称', 'error');
+            return;
+        }
+        if (!value) {
+            this.showToast('请输入API密钥值', 'error');
+            return;
+        }
+
+        // 检查名称是否已存在
+        if (this.apiKeys.some(key => key.name === name)) {
+            this.showToast('密钥名称已存在，请使用其他名称', 'error');
+            return;
+        }
+
+        try {
+            // base64编码密钥值
+            const base64Value = btoa(value);
+
+            const response = await this.apiRequest('/api/keys', {
+                method: 'POST',
+                body: JSON.stringify({
+                    name: name,
+                    value: base64Value
+                })
+            });
+
+            if (response.success) {
+                this.showToast('密钥添加成功', 'success');
+                // 清空输入框
+                nameInput.value = '';
+                valueInput.value = '';
+                // 重新加载密钥列表
+                await this.loadApiKeys();
+            } else {
+                this.showToast(`添加失败: ${response.message || '未知错误'}`, 'error');
+            }
+        } catch (error) {
+            console.error('添加密钥失败:', error);
+            this.showToast(`添加失败: ${error.message}`, 'error');
+        }
+    }
+
+    // 删除密钥
+    async handleDeleteKey(keyId, keyName, isDefault) {
+        if (isDefault) {
+            this.showToast('默认密钥无法删除', 'error');
+            return;
+        }
+
+        if (!confirm(`确定要删除密钥 "${keyName}" 吗？\n\n注意：使用此密钥的Bot和会话将自动切换为默认密钥。`)) {
+            return;
+        }
+
+        try {
+            const response = await this.apiRequest(`/api/keys/${keyId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.success) {
+                this.showToast('密钥删除成功', 'success');
+                await this.loadApiKeys();
+                // 重新加载当前Bot配置（如果当前正在编辑的Bot使用了被删除的密钥）
+                if (this.currentBotId) {
+                    await this.loadBotConfig(this.currentBotId);
+                }
+            } else {
+                this.showToast(`删除失败: ${response.message || '未知错误'}`, 'error');
+            }
+        } catch (error) {
+            console.error('删除密钥失败:', error);
+            this.showToast(`删除失败: ${error.message}`, 'error');
+        }
+    }
+
+    // 显示密钥编辑对话框
+    showKeyEditDialog(keyId) {
+        const key = this.apiKeys.find(k => k.id === keyId);
+        if (!key) return;
+
+        this.currentEditingKeyId = keyId;
+
+        const nameInput = document.getElementById('edit-key-name');
+        const valueInput = document.getElementById('edit-key-value');
+        const overlay = document.getElementById('key-edit-overlay');
+
+        if (nameInput) nameInput.value = key.name;
+        if (valueInput) valueInput.value = ''; // 安全考虑，不显示原密钥值
+        if (overlay) overlay.style.display = 'flex';
+    }
+
+    // 隐藏密钥编辑对话框
+    hideKeyEditDialog() {
+        const overlay = document.getElementById('key-edit-overlay');
+        if (overlay) overlay.style.display = 'none';
+        this.currentEditingKeyId = null;
+    }
+
+    // 保存密钥编辑
+    async handleSaveKeyEdit() {
+        if (!this.currentEditingKeyId) return;
+
+        const nameInput = document.getElementById('edit-key-name');
+        const valueInput = document.getElementById('edit-key-value');
+
+        if (!nameInput) return;
+
+        const name = nameInput.value.trim();
+        const value = valueInput.value.trim();
+
+        if (!name) {
+            this.showToast('密钥名称不能为空', 'error');
+            return;
+        }
+
+        try {
+            const updateData = {};
+
+            // 检查名称是否已存在（排除自身）
+            const existingKey = this.apiKeys.find(k => k.name === name && k.id !== this.currentEditingKeyId);
+            if (existingKey) {
+                this.showToast('密钥名称已存在，请使用其他名称', 'error');
+                return;
+            }
+
+            updateData.name = name;
+
+            // 如果提供了新密钥值，则base64编码
+            if (value) {
+                updateData.value = btoa(value);
+            }
+
+            const response = await this.apiRequest(`/api/keys/${this.currentEditingKeyId}`, {
+                method: 'PUT',
+                body: JSON.stringify(updateData)
+            });
+
+            if (response.success) {
+                this.showToast('密钥更新成功', 'success');
+                this.hideKeyEditDialog();
+                await this.loadApiKeys();
+            } else {
+                this.showToast(`更新失败: ${response.message || '未知错误'}`, 'error');
+            }
+        } catch (error) {
+            console.error('更新密钥失败:', error);
+            this.showToast(`更新失败: ${error.message}`, 'error');
+        }
+    }
+
+    // 将API密钥应用到全部会话
+    async applyApiKeyToAll() {
+        if (!this.currentBotId) return;
+
+        const selectElement = document.getElementById('bot-api-key-selection');
+        if (!selectElement) return;
+
+        const keyId = selectElement.value;
+        if (!keyId) return;
+
+        // 确认提示
+        if (!confirm(`确定要将当前选择的API密钥应用到该Bot的所有会话吗？\n\n此操作将覆盖所有会话的API密钥配置。`)) {
+            return;
+        }
+
+        try {
+            const response = await this.apiRequest(`/api/config/${this.currentBotId}/apply-key-to-all`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    switch_type: 'api_key_selection',
+                    value: keyId,
+                    enabled: true
+                })
+            });
+
+            if (response.success) {
+                this.showToast(`成功更新 ${response.updated_sessions}/${response.total_sessions} 个会话`, 'success');
+            } else {
+                this.showToast(`应用失败: ${response.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('应用API密钥到全部会话失败:', error);
+            this.showToast(`应用失败: ${error.message}`, 'error');
         }
     }
 
