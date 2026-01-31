@@ -483,18 +483,23 @@ class ConfigManager:
             return encrypted  # 兼容未加密的旧数据
 
     def get_api_keys(self) -> List[ApiKeyInfo]:
-        """获取API密钥列表（不返回实际密钥值）"""
+        """获取API密钥列表（包含解密后的密钥值）"""
         self._reload_config_if_needed()
         api_keys = self.config_data.get("api_keys", {})
 
         result = []
         for key_id, key_data in api_keys.items():
+            # 获取解密后的密钥值
+            encrypted_value = key_data.get("value", "")
+            value = self.decrypt_key_value(encrypted_value) if encrypted_value else ""
+
             result.append(ApiKeyInfo(
                 id=key_id,
                 name=key_data.get("name", "未知密钥"),
                 source=key_data.get("source", "user_defined"),
                 created_at=key_data.get("created_at", ""),
-                is_default=key_data.get("is_default", False)
+                is_default=key_data.get("is_default", False),
+                value=value
             ))
 
         return result

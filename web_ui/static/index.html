@@ -186,14 +186,14 @@
                                                         <option value="default">default</option>
                                                         <!-- 密钥选项将通过JavaScript动态加载 -->
                                                     </select>
-                                                    <button id="apply-api-key-to-all" class="btn btn-small btn-secondary">
-                                                        <i class="fas fa-sync-alt"></i> 应用到全部会话
-                                                    </button>
                                                 </div>
                                             </div>
                                             <div class="form-hint">
                                                 选择用于此Bot的MemOS API密钥
                                             </div>
+                                            <button id="apply-api-key-to-all" class="btn btn-small btn-secondary apply-to-all-btn">
+                                                <i class="fas fa-sync-alt"></i> 应用到全部会话
+                                            </button>
                                         </div>
 
                                         <div class="form-group desktop-horizontal-item">
@@ -209,7 +209,7 @@
                                             <div class="form-hint">
                                                 控制该Bot是否启用MemOS记忆注入
                                             </div>
-                                            <button id="apply-memory-injection-to-all" class="btn btn-small btn-secondary" style="margin-top: 8px;">
+                                            <button id="apply-memory-injection-to-all" class="btn btn-small btn-secondary apply-to-all-btn">
                                                 <i class="fas fa-sync-alt"></i> 应用到全部会话
                                             </button>
                                         </div>
@@ -227,7 +227,7 @@
                                             <div class="form-hint">
                                                 控制该Bot是否启用新会话数据上传至MemOS
                                             </div>
-                                            <button id="apply-new-session-upload-to-all" class="btn btn-small btn-secondary" style="margin-top: 8px;">
+                                            <button id="apply-new-session-upload-to-all" class="btn btn-small btn-secondary apply-to-all-btn">
                                                 <i class="fas fa-sync-alt"></i> 应用到全部会话
                                             </button>
                                         </div>
@@ -401,8 +401,8 @@
                     <i class="fas fa-key"></i>
                     <div class="key-item-details">
                         <span class="key-name">{name}</span>
-                        <span class="key-source">{source}</span>
                         <span class="key-time">创建于: {created_at}</span>
+                        <span class="key-value">密钥: {value}</span>
                     </div>
                 </div>
                 <div class="key-item-actions">

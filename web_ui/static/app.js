@@ -1362,8 +1362,8 @@ class MemOSWebUI {
             const keyHtml = template.innerHTML
                 .replace(/{id}/g, key.id)
                 .replace(/{name}/g, key.name)
-                .replace(/{source}/g, key.source === 'plugin_config' ? '插件配置' : '用户定义')
-                .replace(/{created_at}/g, new Date(key.created_at).toLocaleString());
+                .replace(/{created_at}/g, new Date(key.created_at).toLocaleString())
+                .replace(/{value}/g, key.value || '');
 
             const keyElement = document.createElement('div');
             keyElement.innerHTML = keyHtml;
@@ -1375,11 +1375,17 @@ class MemOSWebUI {
                 const editBtn = keyItem.querySelector('.btn-edit-key');
                 const deleteBtn = keyItem.querySelector('.btn-delete-key');
 
-                if (editBtn) {
-                    editBtn.addEventListener('click', () => this.showKeyEditDialog(key.id));
-                }
-                if (deleteBtn) {
-                    deleteBtn.addEventListener('click', () => this.handleDeleteKey(key.id, key.name, key.is_default));
+                // 如果是默认密钥，隐藏编辑和删除按钮
+                if (key.is_default) {
+                    if (editBtn) editBtn.style.display = 'none';
+                    if (deleteBtn) deleteBtn.style.display = 'none';
+                } else {
+                    if (editBtn) {
+                        editBtn.addEventListener('click', () => this.showKeyEditDialog(key.id));
+                    }
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener('click', () => this.handleDeleteKey(key.id, key.name, key.is_default));
+                    }
                 }
             }
         });
@@ -1566,7 +1572,7 @@ class MemOSWebUI {
         const overlay = document.getElementById('key-edit-overlay');
 
         if (nameInput) nameInput.value = key.name;
-        if (valueInput) valueInput.value = ''; // 安全考虑，不显示原密钥值
+        if (valueInput) valueInput.value = key.value || ''; // 显示解密后的密钥值
         if (overlay) overlay.style.display = 'flex';
     }
 
@@ -1712,8 +1718,10 @@ class MemOSWebUI {
         // 根据内容宽度应用布局类
         if (contentWidth >= 1025) {
             configContainer.classList.add('layout-wide');
-        } else {
+        } else if (contentWidth >= 768) {
             configContainer.classList.add('layout-medium');
+        } else {
+            configContainer.classList.add('layout-narrow');
         }
     }
 }

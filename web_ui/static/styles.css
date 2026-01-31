@@ -136,11 +136,11 @@ html, body {
         display: none;
     }
     
-    .btn span {
+    .btn:not(.apply-to-all-btn) span {
         display: none;
     }
     
-    .btn {
+    .btn:not(.apply-to-all-btn) {
         padding: 0.5rem;
     }
 }
@@ -205,6 +205,12 @@ html, body {
 .btn-small {
     padding: 0.25rem 0.75rem;
     font-size: 0.75rem;
+}
+
+.apply-to-all-btn {
+    margin-top: 8px;
+    width: auto;
+    white-space: nowrap;
 }
 
 .btn-block {
@@ -341,6 +347,166 @@ html, body {
 .layout-medium .desktop-horizontal-item:not(:first-child) {
     flex: 0 0 calc(50% - 0.75rem);
     min-width: auto;
+}
+
+/* 宽屏布局：按钮在选择框下方 */
+.layout-wide .key-select-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.layout-wide .key-select-row .key-select {
+    width: 100%;
+    max-width: 300px;
+}
+
+/* 宽屏布局：选择框和按钮固定宽度 */
+.layout-wide .desktop-horizontal-item:nth-child(2) .key-select {
+    max-width: 300px;
+    width: 100%;
+}
+
+.layout-wide .desktop-horizontal-item:nth-child(2) .apply-to-all-btn {
+    width: auto;
+}
+    margin-left: 0;
+}
+
+
+/* 中屏布局：文本框和选择框在第一行，两个开关在第二行 */
+.layout-medium .desktop-horizontal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 1.5rem;
+}
+
+.layout-medium .desktop-horizontal-item:first-child {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.layout-medium .desktop-horizontal-item:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.layout-medium .desktop-horizontal-item:nth-child(3) {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.layout-medium .desktop-horizontal-item:nth-child(4) {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+/* 中屏布局：按钮在选择框下方 */
+.layout-medium .key-select-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.layout-medium .key-select-row .key-select {
+    width: 100%;
+    max-width: 300px;
+}
+
+/* 中屏布局：选择框和按钮固定宽度 */
+.layout-medium .desktop-horizontal-item:nth-child(2) .key-select {
+    max-width: 300px;
+    width: 100%;
+}
+
+.layout-medium .desktop-horizontal-item:nth-child(2) .apply-to-all-btn {
+    width: auto;
+}
+    margin-left: 0;
+}
+
+
+/* 窄屏布局 */
+.layout-narrow .desktop-horizontal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 1.5rem;
+}
+
+.layout-narrow .desktop-horizontal-item {
+    width: 100%;
+}
+
+/* 第一行：文本框独占一行 */
+.layout-narrow .desktop-horizontal-item:first-child {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+}
+
+/* 第二行：选择框和按钮在同一行 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+/* 窄屏布局：label在第一行 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) label {
+    grid-column: 1 / span 2;
+    grid-row: 1;
+    margin-bottom: 0;
+}
+
+/* 窄屏布局：选择框在第二行第一列 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) .key-selection-container {
+    grid-column: 1;
+    grid-row: 2;
+    margin-bottom: 0;
+}
+
+/* 窄屏布局：按钮在第二行第二列 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) .apply-to-all-btn {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0;
+    align-self: center;
+}
+
+/* 窄屏布局：提示文字在第三行 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) .form-hint {
+    grid-column: 1 / span 2;
+    grid-row: 3;
+    margin-top: 0;
+}
+
+/* 窄屏布局：选择框宽度自适应 */
+.layout-narrow .desktop-horizontal-item:nth-child(2) .key-select {
+    max-width: none;
+    width: 100%;
+}
+
+/* 窄屏布局：始终显示按钮文字和图标 */
+.layout-narrow #apply-api-key-to-all {
+    font-size: 0.75rem;
+}
+
+/* 第三行：两个开关并排 */
+.layout-narrow .desktop-horizontal-item:nth-child(3) {
+    grid-column: 1;
+    grid-row: 3;
+}
+
+.layout-narrow .desktop-horizontal-item:nth-child(4) {
+    grid-column: 2;
+    grid-row: 3;
 }
 
 /* 响应式适配 */
@@ -1159,18 +1325,23 @@ input:checked + .toggle-label:before {
     font-size: 0.9rem;
 }
 
-.key-source {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    background-color: var(--hover-bg);
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    display: inline-block;
-}
 
 .key-time {
     font-size: 0.7rem;
     color: var(--text-secondary);
+}
+
+.key-value {
+    font-size: 0.75rem;
+    font-family: monospace;
+    color: var(--text-secondary);
+    background-color: var(--hover-bg);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    word-break: break-all;
+    margin-top: 0.25rem;
+    max-height: 4rem;
+    overflow-y: auto;
 }
 
 .key-item-actions {
@@ -1190,7 +1361,8 @@ input:checked + .toggle-label:before {
 }
 
 .key-select {
-    flex: 1;
+    width: 100%;
+    max-width: 300px;
     padding: 0.5rem;
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
@@ -1346,64 +1518,12 @@ input:checked + .toggle-label:before {
     opacity: 0.5;
 }
 
-/* 响应式布局 - 宽屏 (>1024px) */
-@media (min-width: 1024px) {
-    .key-select-row {
-        display: flex;
-        gap: 1rem;
-        align-items: center;
-    }
+/* 响应式布局 - 宽屏 (>1024px) - 现在由布局类控制 */
 
-    .key-select-row .key-select {
-        flex: 1;
-    }
-
-    .key-select-row #apply-api-key-to-all {
-        flex-shrink: 0;
-    }
-}
-
-/* 响应式布局 - 中屏 (768px-1024px) */
-@media (min-width: 768px) and (max-width: 1024px) {
-    .key-select-row {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-    }
-
-    .key-select-row .key-select {
-        width: 100%;
-    }
-
-    .key-select-row #apply-api-key-to-all {
-        width: 100%;
-    }
-}
+/* 响应式布局 - 中屏 (768px-1024px) - 现在由布局类控制 */
 
 /* 响应式布局 - 窄屏 (<768px，手机移动端) */
 @media (max-width: 768px) {
-    .key-select-row {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-    }
-
-    .key-select-row .key-select {
-        flex: 1;
-    }
-
-    .key-select-row #apply-api-key-to-all {
-        flex-shrink: 0;
-        padding: 0.5rem;
-    }
-
-    .key-select-row #apply-api-key-to-all i {
-        margin: 0;
-    }
-
-    .key-select-row #apply-api-key-to-all span {
-        display: none;
-    }
 
     /* 调整密钥管理区域在移动端的显示 */
     .key-management-content {

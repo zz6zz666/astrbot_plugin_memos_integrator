@@ -26,6 +26,7 @@ class ApiKeyInfo(BaseModel):
     source: Literal["plugin_config", "user_defined"] = Field(..., description="密钥来源")
     created_at: str = Field(..., description="创建时间")
     is_default: bool = Field(default=False, description="是否为默认密钥")
+    value: Optional[str] = Field(None, description="解密后的密钥值")
 
 class ApiKeyListResponse(BaseModel):
     """API密钥列表响应模型"""
