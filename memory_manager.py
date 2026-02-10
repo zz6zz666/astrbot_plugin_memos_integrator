@@ -15,16 +15,18 @@ import aiohttp
 class MemoryManager:
     """MemOS记忆管理器 - 使用HTTP API直接访问MemOS服务"""
 
-    def __init__(self, api_key: str, base_url: str = "https://memos.memtensor.cn/api/openmem/v1"):
+    def __init__(self, api_key: str, base_url: str = "https://memos.memtensor.cn/api/openmem/v1", enable_skill: bool = False):
         """初始化记忆管理器
 
         Args:
             api_key: MemOS API密钥
             base_url: MemOS API基础URL
+            enable_skill: 是否启用技能注入，默认False
         """
         self.api_key = api_key
         self.base_url = base_url.rstrip('/')
-        logger.info(f"MemoryManager初始化完成, API地址: {self.base_url}")
+        self.enable_skill = enable_skill
+        logger.info(f"MemoryManager初始化完成, API地址: {self.base_url}, 技能注入: {'启用' if enable_skill else '禁用'}")
 
     async def _make_request(self, endpoint: str, data: Dict[str, Any], api_key: Optional[str] = None) -> Dict[str, Any]:
         """发送HTTP请求到MemOS API
@@ -300,7 +302,6 @@ class MemoryManager:
             original_prompt: 原始用户提示
             memories: 记忆列表
             language: 语言,"zh"为中文,"en"为英文
-            model_type: 模型类型,"default"为默认模型,"qwen"为通义千问模型
             injection_type: 注入类型,"user"为用户注入,"system"为系统注入
 
         Returns:
@@ -311,25 +312,21 @@ class MemoryManager:
             return original_prompt
 
         try:
-            # 格式化记忆内容
-            memory_content = MemoryTemplates.format_memory_content(memories, language)
-            logger.debug(f"格式化后的记忆内容:\n{memory_content}")
-
             # 获取当前时间
             current_time = time.strftime("%Y-%m-%d %H:%M", time.localtime())
 
-            # 获取记忆注入模板
-            template = MemoryTemplates.get_injection_template(language, injection_type)
-            logger.debug(f"使用的记忆注入模板类型: {language}-{injection_type}")
-
-            # 填充模板
-            injected_prompt = template.format(
+            # 使用新的 build_injection_prompt 方法构建提示词
+            injected_prompt = MemoryTemplates.build_injection_prompt(
                 original_query=original_prompt,
-                memory_content=memory_content,
-                current_time=current_time
+                memories=memories,
+                skills=[],  # 当前未检索技能，传入空列表
+                language=language,
+                injection_type=injection_type,
+                current_time=current_time,
+                enable_skill=self.enable_skill
             )
 
-            logger.info(f"已注入 {len(memories)} 条记忆到提示中")
+            logger.info(f"已注入 {len(memories)} 条记忆到提示中 (技能注入: {'启用' if self.enable_skill else '禁用'})")
 
             return injected_prompt
         except Exception as e:

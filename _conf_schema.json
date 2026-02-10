@@ -17,6 +17,12 @@
     "hint": "每次最多注入多少条事实记忆到提示词中（偏好记忆一定注入）",
     "default": 5
   },
+  "enable_skill_injection": {
+    "type": "bool",
+    "description": "技能注入开关",
+    "hint": "是否启用技能注入功能。关闭时，合成的提示词中不包含Skill Data相关板块",
+    "default": false
+  },
   "prompt_language": {
     "description": "记忆提示词语言",
     "type": "string",

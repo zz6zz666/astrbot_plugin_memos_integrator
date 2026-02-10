@@ -65,16 +65,21 @@ class MemosIntegratorPlugin(Star):
             # 新增配置：控制群聊和私聊场景下的注入类型
             self.group_injection_type = self.config.get("group_injection_type", "user")  # 群聊注入类型: "user" 或 "system"
             self.private_injection_type = self.config.get("private_injection_type", "user")  # 私聊注入类型: "user" 或 "system"
+            
+            # 新增配置：技能注入开关
+            self.enable_skill_injection = self.config.get("enable_skill_injection", False)  # 默认关闭技能注入
 
             # 初始化记忆管理器
             self.memory_manager = MemoryManager(
                 api_key=api_key,
-                base_url=base_url
+                base_url=base_url,
+                enable_skill=self.enable_skill_injection
             )
 
             logger.info("MemOS记忆集成插件已加载")
             logger.info(f"插件配置: API地址={base_url}, 记忆注入限制={self.memory_limit}, 批量上传频率={self.upload_interval}轮")
             logger.info(f"注入类型配置: 群聊={self.group_injection_type}, 私聊={self.private_injection_type}")
+            logger.info(f"技能注入配置: {'启用' if self.enable_skill_injection else '禁用'}")
         except Exception as e:
             logger.error(f"初始化MemOS记忆管理器失败: {e}")
             self.memory_manager = None
