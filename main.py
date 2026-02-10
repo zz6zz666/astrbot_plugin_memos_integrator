@@ -20,7 +20,7 @@ from .web_ui.config_manager import ConfigManager
 from .web_ui.data_models import BotConfig
 
 # 主插件类
-@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "3.0.0")
+@register("astrbot_plugin_memos_integrator","zz6zz666", "MemOS记忆集成插件", "3.0.1")
 class MemosIntegratorPlugin(Star):
     PLUGIN_ID = "astrbot_plugin_memos_integrator"
     
@@ -60,7 +60,7 @@ class MemosIntegratorPlugin(Star):
             base_url = self.config.get("base_url", "https://memos.memtensor.cn/api/openmem/v1")
             self.memory_limit = self.config.get("memory_limit", 5)
             self.prompt_language = self.config.get("prompt_language", "auto")
-            self.upload_interval = self.config.get("upload_interval", 1) # 获取上传频率配置
+            self.upload_interval = int(self.config.get("upload_interval", 1)) # 获取上传频率配置，确保为整数
             
             # 新增配置：控制群聊和私聊场景下的注入类型
             self.group_injection_type = self.config.get("group_injection_type", "user")  # 群聊注入类型: "user" 或 "system"

@@ -1,6 +1,6 @@
 name: astrbot_plugin_memos_integrator # 插件唯一识别名，以 astrbot_plugin_ 前缀开头
 display_name: MemOS 记忆集成插件 # 用于展示的名字，可以是方便人类阅读的名字
 desc: 为 AstrBot 提供 MemOS 记忆功能，实现持久化对话记忆和智能检索 # 插件简短描述
-version: v3.0.0 # 插件版本号。格式：v1.1.1 或者 v1.1
+version: v3.0.1 # 插件版本号。格式：v1.1.1 或者 v1.1
 author: zz6zz666 # 作者
 repo: https://github.com/zz6zz666/astrbot_plugin_memos_integrator # 插件的仓库地址
